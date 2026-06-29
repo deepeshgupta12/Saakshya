@@ -54,6 +54,8 @@ data/cache/
 .claude/skills/slides/
 # GitNexus skills — reinstall: npx -y gitnexus@latest setup
 .claude/skills/gitnexus/
+# GitNexus-generated repo skills (regenerable via `analyze --skills`)
+.claude/skills/generated/
 
 # ---- Logs & temp ----
 *.log
