@@ -118,5 +118,8 @@ def get_source(name: str | None = None) -> DataSource:
         from app.data.yfinance_source import YFinanceSource
 
         return YFinanceSource()
-    # nse_bhavcopy stub lands in milestone M1 (docs/steps/01 — Bhavcopy + delivery stub).
+    if resolved == "nse_bhavcopy":
+        from app.data.nse_bhavcopy_source import NseBhavcopSource
+
+        return NseBhavcopSource()
     raise ValueError(f"Unknown or not-yet-registered data source: {resolved!r}")

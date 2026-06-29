@@ -64,6 +64,24 @@ class DataQualityLog(BaseModel):
     detail: str | None = None
 
 
+class CorpActionRecord(BaseModel):
+    """One corporate action row — stores the single-event backward price-adjustment factor."""
+
+    model_config = ConfigDict(extra="forbid")
+    action_id: int | None = None
+    stock_id: int
+    action_type: str  # split | bonus | dividend | rights | merger | symbol_change
+    ex_date: date
+    ratio_from: float | None = None
+    ratio_to: float | None = None
+    dividend_amount: float | None = None
+    new_symbol: str | None = None
+    factor: float | None = None  # single-event backward adj factor; None if not computable yet
+    source: str
+    reconciled: bool = False
+    as_of_version: int = 1
+
+
 _OHLC_COLS = (
     "stock_id, session_date, open_raw, high_raw, low_raw, close_raw, "
     "open_adj, high_adj, low_adj, close_adj, volume, delivery_qty, delivery_pct, "
@@ -85,11 +103,11 @@ class Repository:
         if row is not None:
             return int(row[0])
         self._conn.execute("INSERT INTO sector_master (name) VALUES (?)", [name])
-        return int(
-            self._conn.execute(
-                "SELECT sector_id FROM sector_master WHERE name = ?", [name]
-            ).fetchone()[0]
-        )
+        inserted = self._conn.execute(
+            "SELECT sector_id FROM sector_master WHERE name = ?", [name]
+        ).fetchone()
+        assert inserted is not None
+        return int(inserted[0])
 
     def upsert_stock(self, stock: StockMaster) -> int:
         """Get-or-insert by ``primary_symbol`` (idempotent). Returns the stock_id.
@@ -110,12 +128,12 @@ class Repository:
                 stock.parent_isin, stock.status, stock.listed_on, stock.delisted_on,
             ],
         )
-        return int(
-            self._conn.execute(
-                "SELECT stock_id FROM stock_master WHERE primary_symbol = ?",
-                [stock.primary_symbol],
-            ).fetchone()[0]
-        )
+        inserted = self._conn.execute(
+            "SELECT stock_id FROM stock_master WHERE primary_symbol = ?",
+            [stock.primary_symbol],
+        ).fetchone()
+        assert inserted is not None
+        return int(inserted[0])
 
     def get_stock_id(self, primary_symbol: str) -> int | None:
         row = self._conn.execute(
@@ -136,12 +154,12 @@ class Repository:
             "INSERT INTO exchange_symbols (stock_id, exchange, symbol, series) VALUES (?,?,?,?)",
             [stock_id, exchange, symbol, series],
         )
-        return int(
-            self._conn.execute(
-                "SELECT id FROM exchange_symbols WHERE exchange = ? AND symbol = ?",
-                [exchange, symbol],
-            ).fetchone()[0]
-        )
+        inserted = self._conn.execute(
+            "SELECT id FROM exchange_symbols WHERE exchange = ? AND symbol = ?",
+            [exchange, symbol],
+        ).fetchone()
+        assert inserted is not None
+        return int(inserted[0])
 
     def resolve_ticker(self, exchange: str, symbol: str, on: date | None = None) -> int | None:
         """Resolve a vendor ticker → stock_id, honoring symbol-change validity windows."""
@@ -188,6 +206,7 @@ class Repository:
             row = self._conn.execute(
                 "SELECT count(*) FROM daily_ohlc WHERE stock_id = ?", [stock_id]
             ).fetchone()
+        assert row is not None  # count() always returns a row
         return int(row[0])
 
     def max_as_of_version(self, stock_id: int, session_date: date) -> int | None:
@@ -207,6 +226,80 @@ class Repository:
         ).fetchall()
         cols = [c.strip() for c in _OHLC_COLS.split(",")]
         return [OhlcBar(**dict(zip(cols, r, strict=True))) for r in rows]
+
+    # --- corporate actions ----------------------------------------------
+    def upsert_corporate_action(self, rec: CorpActionRecord) -> None:
+        """Insert or skip (idempotent) by (stock_id, action_type, ex_date)."""
+        exists = self._conn.execute(
+            "SELECT action_id FROM corporate_actions "
+            "WHERE stock_id=? AND action_type=? AND ex_date=?",
+            [rec.stock_id, rec.action_type, rec.ex_date],
+        ).fetchone()
+        if exists is not None:
+            return
+        self._conn.execute(
+            "INSERT INTO corporate_actions "
+            "(stock_id, action_type, ex_date, ratio_from, ratio_to, dividend_amount, "
+            "new_symbol, factor, source, reconciled, as_of_version) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            [
+                rec.stock_id, rec.action_type, rec.ex_date,
+                rec.ratio_from, rec.ratio_to, rec.dividend_amount,
+                rec.new_symbol, rec.factor, rec.source, rec.reconciled, rec.as_of_version,
+            ],
+        )
+
+    def get_corporate_actions(self, stock_id: int) -> list[CorpActionRecord]:
+        """All actions for a stock, ordered by ex_date ASC."""
+        rows = self._conn.execute(
+            "SELECT action_id, stock_id, action_type, ex_date, ratio_from, ratio_to, "
+            "dividend_amount, new_symbol, factor, source, reconciled, as_of_version "
+            "FROM corporate_actions WHERE stock_id=? ORDER BY ex_date ASC",
+            [stock_id],
+        ).fetchall()
+        return [
+            CorpActionRecord(
+                action_id=r[0], stock_id=r[1], action_type=r[2], ex_date=r[3],
+                ratio_from=r[4], ratio_to=r[5], dividend_amount=r[6],
+                new_symbol=r[7], factor=r[8], source=r[9], reconciled=bool(r[10]),
+                as_of_version=r[11],
+            )
+            for r in rows
+        ]
+
+    def get_all_bars(self, stock_id: int, as_of_version: int = 1) -> list[OhlcBar]:
+        """All bars for a stock at the given as_of_version, ordered by session_date ASC."""
+        rows = self._conn.execute(
+            f"SELECT {_OHLC_COLS} FROM daily_ohlc "
+            "WHERE stock_id=? AND as_of_version=? ORDER BY session_date ASC",
+            [stock_id, as_of_version],
+        ).fetchall()
+        cols = [c.strip() for c in _OHLC_COLS.split(",")]
+        return [OhlcBar(**dict(zip(cols, r, strict=True))) for r in rows]
+
+    def update_bar_adjustments(
+        self,
+        stock_id: int,
+        as_of_version: int,
+        updates: list[tuple[float, float, float, float, float, bool, bool, date]],
+    ) -> int:
+        """Bulk-update adj columns (no as_of bump — adjustment derives from stored corp actions).
+
+        Each tuple: (adj_factor, open_adj, high_adj, low_adj, close_adj, is_adjusted,
+                     reconciled, session_date)
+        """
+        if not updates:
+            return 0
+        params = [(u[0], u[1], u[2], u[3], u[4], u[5], u[6], stock_id, u[7], as_of_version)
+                  for u in updates]
+        self._conn.executemany(
+            "UPDATE daily_ohlc SET "
+            "adj_factor=?, open_adj=?, high_adj=?, low_adj=?, close_adj=?, "
+            "is_adjusted=?, reconciled=? "
+            "WHERE stock_id=? AND session_date=? AND as_of_version=?",
+            params,
+        )
+        return len(params)
 
     # --- data quality ---------------------------------------------------
     def write_quality_log(self, log: DataQualityLog) -> None:

@@ -15,6 +15,7 @@ from __future__ import annotations
 import time
 from collections.abc import Iterable
 from datetime import date, datetime, timezone
+from typing import Any
 
 import httpx
 import pandas as pd
@@ -57,8 +58,56 @@ class YFinanceSource:
     def fetch_corporate_actions(
         self, symbols: Iterable[str], since: date
     ) -> list[CorpActionRow]:
-        # Corp-action ingestion is the M1 workstream (corp_actions master + adjuster).
-        return []
+        """Pull splits and dividends from yfinance for the given tickers since ``since``."""
+        rows: list[CorpActionRow] = []
+        for symbol in symbols:
+            rows.extend(self._fetch_actions_for(symbol, since))
+        return rows
+
+    def _fetch_actions_for(self, symbol: str, since: date) -> list[CorpActionRow]:
+        try:
+            ticker = yf.Ticker(symbol)
+            splits = ticker.splits      # pd.Series: {Timestamp → new/old ratio}
+            dividends = ticker.dividends  # pd.Series: {Timestamp → dividend amount}
+        except Exception:  # noqa: BLE001
+            return []
+
+        out: list[CorpActionRow] = []
+
+        for ts, factor in splits.items():
+            try:
+                ex_d = ts.date()
+            except AttributeError:
+                ex_d = ts
+            if ex_d < since or float(factor) <= 0:
+                continue
+            # yfinance factor = new_shares / old_shares (e.g. 2.0 for 2-for-1 split).
+            # Store as ratio_from=1, ratio_to=factor so event_factor = 1/factor (price halves).
+            out.append(CorpActionRow(
+                symbol=symbol,
+                action_type="split",
+                ex_date=ex_d,
+                ratio_from=1.0,
+                ratio_to=float(factor),
+                source="yfinance",
+            ))
+
+        for ts, amount in dividends.items():
+            try:
+                ex_d = ts.date()
+            except AttributeError:
+                ex_d = ts
+            if ex_d < since:
+                continue
+            out.append(CorpActionRow(
+                symbol=symbol,
+                action_type="dividend",
+                ex_date=ex_d,
+                dividend_amount=float(amount),
+                source="yfinance",
+            ))
+
+        return out
 
     def _fetch_one(self, symbol: str, period: str) -> list[OHLCRow]:
         rows = self._fetch_via_library(symbol, period)
@@ -130,7 +179,7 @@ class YFinanceSource:
         return _parse_chart(symbol, payload)
 
 
-def _parse_chart(symbol: str, payload: dict) -> list[OHLCRow]:
+def _parse_chart(symbol: str, payload: dict[str, Any]) -> list[OHLCRow]:
     result = (payload.get("chart") or {}).get("result")
     if not result:
         return []
@@ -163,7 +212,7 @@ def _parse_chart(symbol: str, payload: dict) -> list[OHLCRow]:
             _row(
                 symbol, session_date, open_raw, high_raw, low_raw, close_raw,
                 open_raw * factor, high_raw * factor, low_raw * factor, close_adj,
-                int(_at(volumes, i) or 0), adj_close is not None, factor,
+                int(_f(_at(volumes, i)) or 0), adj_close is not None, factor,
             )
         )
     return out
@@ -183,7 +232,7 @@ def _row(
     )
 
 
-def _at(seq: list, i: int) -> object:
+def _at(seq: list[object], i: int) -> object:
     return seq[i] if i < len(seq) else None
 
 
