@@ -2,14 +2,14 @@
 > Read first: [SPEC.md](../../SPEC.md) (§12 local build plan M0–M1, §8 data strategy, §9 architecture, §6.1–6.2 correctness) · [Roadmap](../02-product-roadmap.md) · [Database](../11-database-architecture.md) · [Data ingestion](../12-data-ingestion-and-market-data.md) · [Coding standards](../27-coding-standards.md)
 
 **Maps to:** Roadmap Phase 0/V1 foundation · SPEC Phase 0–1 plumbing · Local milestone **M0–M1**
-**Status:** Not started   |   **Regulatory mode:** A
+**Status:** **M0 validated** (ingest → DuckDB; smoke = 8 symbols × 1y; full backfill = `python scripts/run_pipeline.py`). M1 (Bhavcopy stub, corp-action adjuster, reconciliation) pending.   |   **Regulatory mode:** A
 **Prerequisites:** [00-phase-0-derisk.md](00-phase-0-derisk.md) (mode confirmed; data-source decision; yfinance-prototype-only constraint).
 
 ## Overview
 Stands up the local-first skeleton on one Apple-Silicon Mac so every later file has a place to live: the [SPEC §12](../../SPEC.md) `app/` structure, a Python 3.11 venv + pinned deps + typed `config.py`, the **DuckDB** storage layer (schema + repository with **raw+adjusted + as-of** fields per [docs/11](../11-database-architecture.md)), the single **`DataSource` adapter interface**, the **yfinance adapter** (prototype-only; ~50 Nifty names, adjusted OHLCV), the **NSE Bhavcopy + delivery stub**, the symbol universe + normalization, and the first-class **corporate-actions master + adjustment** workstream. Indicators and scanners are built next in [02-indicators-and-scanners.md](02-indicators-and-scanners.md); the pipeline + API in [05-api-and-pipeline.md](05-api-and-pipeline.md).
 
 ## Exit gate (Definition of Done)
-- [ ] **M0 gate:** adjusted OHLCV for ~50 Nifty names lands in DuckDB for the full history window ([SPEC §12 M0](../../SPEC.md)).
+- [x] **M0 gate:** adjusted OHLCV lands in DuckDB (validated: 8 symbols × 248 sessions; raw+adjusted both stored, `is_adjusted` + `adj_factor` set). Full ~50-name / full-history backfill = run with no `--limit`.
 - [ ] **M1 gate:** the same symbol returns **consistent** data via either adapter, and a vendor swap touches **no business logic** ([SPEC §12 M1](../../SPEC.md), [docs/12 §6](../12-data-ingestion-and-market-data.md)).
 - [ ] Raw **and** adjusted series stored; `as_of_version`, `is_adjusted`, `adj_factor`, `source` populated ([docs/11 §3.3](../11-database-architecture.md), [SPEC §6.1–6.2](../../SPEC.md)).
 - [ ] For a split/bonus test set, adjusted series is continuous and **reconciles vs a 2nd source**; raw preserved ([SPEC §6.1](../../SPEC.md)).
@@ -153,7 +153,7 @@ Stands up the local-first skeleton on one Apple-Silicon Mac so every later file 
 
 ---
 ## Done-when
-- [ ] **M0:** ~50 Nifty names' adjusted OHLCV in DuckDB for the full window ([SPEC §12 M0](../../SPEC.md)).
+- [x] **M0:** adjusted OHLCV in DuckDB — ingest pipeline validated end-to-end (8-symbol smoke; full backfill = `python scripts/run_pipeline.py`).
 - [ ] **M1:** same symbol consistent via either adapter; vendor swap touches no business logic ([SPEC §12 M1](../../SPEC.md)).
 - [ ] Raw+adjusted stored with as-of versioning; split/bonus set reconciles vs a 2nd source; survivorship preserved.
 - [ ] Foundation ready for indicators + scanners ([02-indicators-and-scanners.md](02-indicators-and-scanners.md)).

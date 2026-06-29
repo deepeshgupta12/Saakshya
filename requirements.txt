@@ -1,0 +1,19 @@
+# Saakshya local-first (M1 Mac, arm64 wheels, NO TA-Lib) — SPEC §12 / docs/27 §7.3
+# Core data + storage
+duckdb==1.1.3
+pandas==2.2.3
+numpy==2.1.3
+yfinance==0.2.50            # prototype-only EOD source (SPEC §8); not for commercial redistribution
+# Config + models
+pydantic==2.10.4
+pydantic-settings==2.7.0
+# API (used from M5; pinned now so `pip install -r` is complete)
+fastapi==0.115.6
+uvicorn==0.34.0
+httpx==0.28.1
+# AI layer (used from M4)
+anthropic==0.42.0
+# Tooling / tests
+pytest==8.3.4
+mypy==1.14.1
+ruff==0.8.6

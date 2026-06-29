@@ -1,0 +1,26 @@
+[project]
+name = "saakshya"
+version = "0.0.1"
+description = "AI-powered, evidence-first Indian equity research / scanner / portfolio platform (local-first core)"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["UP017"]  # keep `timezone.utc` (works on 3.10 dev sandboxes; target is 3.11)
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true   # yfinance/duckdb ship partial stubs
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
