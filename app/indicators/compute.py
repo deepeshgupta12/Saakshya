@@ -35,7 +35,7 @@ _IND_COLS = (
     "rsi_14, sma_20, sma_50, sma_200, ema_21, atr_14, "
     "macd_line, macd_signal, bb_upper, bb_mid, bb_lower, "
     "adx_14, stoch_rsi_k, stoch_rsi_d, "
-    "pivot, pivot_r1, pivot_r2, pivot_s1, pivot_s2, "
+    '"pivot", pivot_r1, pivot_r2, pivot_s1, pivot_s2, '
     "vwap, ret_5d, ret_21d, ret_63d, ret_126d, volume_ratio_20, rel_strength_63d"
 )
 
@@ -47,7 +47,7 @@ _IND_UPDATE = (
     "macd_line=excluded.macd_line, macd_signal=excluded.macd_signal, "
     "bb_upper=excluded.bb_upper, bb_mid=excluded.bb_mid, bb_lower=excluded.bb_lower, "
     "adx_14=excluded.adx_14, stoch_rsi_k=excluded.stoch_rsi_k, "
-    "stoch_rsi_d=excluded.stoch_rsi_d, pivot=excluded.pivot, "
+    'stoch_rsi_d=excluded.stoch_rsi_d, "pivot"=excluded."pivot", '
     "pivot_r1=excluded.pivot_r1, pivot_r2=excluded.pivot_r2, "
     "pivot_s1=excluded.pivot_s1, pivot_s2=excluded.pivot_s2, "
     "vwap=excluded.vwap, ret_5d=excluded.ret_5d, ret_21d=excluded.ret_21d, "

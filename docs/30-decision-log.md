@@ -237,6 +237,24 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** All four scanners; UI integration gate; M3b validation workstream.
 - **Status:** Accepted (PENDING_M3B — revisit after D-013 spike completes)
 
+### D-025 — M3b validation harness: versioned GateConfig thresholds + scipy Spearman IC
+- **Date:** 2026-06-30
+- **Context:** SPEC §6.5 requires proving the momentum score tracks realized forward relative strength before the composite drives any UI. The gate thresholds must be fixed in advance (not cherry-picked after seeing results) and version-stamped so any future redesign uses a new config version.
+- **Alternatives considered:** Hard-coded thresholds in gate.py (not reproducible/auditable); ML-tuned thresholds (circular — can't tune until score is validated); no thresholds (just qualitative review — violates the "objective decision gate" requirement).
+- **Final decision:** `app/validation/config.py` holds a `GateConfig` dataclass registry. v1 thresholds: Spearman ρ ≥ 0.6, top-bottom spread > 0, mean IC > 0, IC t-stat ≥ 1.5, no regime inversion. Gate verdict is always tagged with the config version. scipy 1.14.1 added to requirements for `spearmanr`. **Actual run verdict (`VALIDATED` / `FAILED_VALIDATION`) is logged here after `scripts/run_m3b_validation.py` executes on real NSE data.**
+- **Owner:** Quant/Engineering
+- **Impact:** Unblocks composite UI once verdict is `VALIDATED`; triggers redesign loop if `FAILED_VALIDATION`.
+- **Status:** Accepted (harness complete; real-data verdict pending `run_m3b_validation.py` execution)
+
+### D-026 — DuckDB reserved keyword: `pivot` column must be double-quoted in all SQL
+- **Date:** 2026-06-30
+- **Context:** `PIVOT` is a reserved keyword in DuckDB 1.1.3+. The `technical_indicators.pivot` column was named before this was caught. All M2 tests were pure-function tests with no DB; the conflict only surfaced in the first DB-exercising test (`test_apply_validated_verdict_sets_db_flag` in test_gate.py).
+- **Alternatives considered:** Rename the column to `pivot_pp` (cleaner, but a breaking migration on existing DBs); add `"pivot"` quoting everywhere in SQL (backward-compatible).
+- **Final decision:** Double-quote `pivot` in all SQL: `ALTER TABLE ... ADD COLUMN IF NOT EXISTS "pivot"`, SELECT `ti."pivot"`, INSERT/UPDATE `"pivot"=excluded."pivot"`. Affects `duckdb.py`, `compute.py`, `repository.py`.
+- **Owner:** Engineering
+- **Impact:** Storage layer + pipeline; no change to indicator semantics.
+- **Status:** Accepted
+
 ---
 
 ## 2. Decision index
@@ -267,6 +285,8 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-022 | 2026-06-30 | M2 migration: idempotent ALTER TABLE ADD COLUMN IF NOT EXISTS | Engineering | duckdb.py / storage | Accepted |
 | D-023 | 2026-06-30 | VWAP deferred to V7 (intraday only); column always NULL in EOD | Quant/Eng | indicators/schema | Accepted |
 | D-024 | 2026-06-30 | Weights stamped weights-v1-hypothesis / PENDING_M3B; composite not wired to UI | Quant/Eng + Product | All scanners / UI gate | Accepted |
+| D-025 | 2026-06-30 | M3b: GateConfig v1 thresholds (ρ≥0.6, IC t-stat≥1.5); scipy 1.14.1 added | Quant/Eng | Composite UI gate | Accepted (verdict pending — yfinance network-blocked on dev machine) |
+| D-026 | 2026-06-30 | DuckDB reserved keyword: `pivot` must be double-quoted in all SQL | Engineering | Storage/pipeline | Accepted |
 
 ---
 

@@ -3,6 +3,7 @@
 duckdb==1.1.3
 pandas==2.2.3
 numpy==2.1.3
+scipy==1.14.1            # M3b: Spearman IC computation (spearmanr)
 yfinance==0.2.50            # prototype-only EOD source (SPEC §8); not for commercial redistribution
 # Config + models
 pydantic==2.10.4

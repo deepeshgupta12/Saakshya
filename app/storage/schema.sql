@@ -148,6 +148,18 @@ CREATE TABLE IF NOT EXISTS scanner_results (
     UNIQUE (scanner, stock_id, session_date, as_of_version)
 );
 
+-- Scanner definitions: one row per scanner. validated flips to TRUE after M3b (SPEC §6.5).
+CREATE TABLE IF NOT EXISTS scanner_definitions (
+    id            VARCHAR NOT NULL PRIMARY KEY,
+    name          VARCHAR NOT NULL,
+    owner_user_id VARCHAR,
+    plan_required VARCHAR,
+    weights       VARCHAR,
+    version       INTEGER NOT NULL DEFAULT 1,
+    validated     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMP DEFAULT now()
+);
+
 -- primary_symbol is already UNIQUE (indexed); no separate index needed.
 CREATE INDEX IF NOT EXISTS idx_daily_ohlc_stock_date ON daily_ohlc (stock_id, session_date);
 CREATE INDEX IF NOT EXISTS idx_corp_actions_stock ON corporate_actions (stock_id, ex_date);

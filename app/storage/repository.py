@@ -329,7 +329,7 @@ class Repository:
             "ti.rsi_14, ti.sma_20, ti.sma_50, ti.sma_200, ti.ema_21, ti.atr_14, "
             "ti.macd_line, ti.macd_signal, ti.bb_upper, ti.bb_mid, ti.bb_lower, "
             "ti.adx_14, ti.stoch_rsi_k, ti.stoch_rsi_d, "
-            "ti.pivot, ti.pivot_r1, ti.pivot_r2, ti.pivot_s1, ti.pivot_s2, "
+            'ti."pivot", ti.pivot_r1, ti.pivot_r2, ti.pivot_s1, ti.pivot_s2, '
             "ti.vwap, ti.ret_5d, ti.ret_21d, ti.ret_63d, ti.ret_126d, "
             "ti.volume_ratio_20, ti.rel_strength_63d "
             "FROM technical_indicators ti "

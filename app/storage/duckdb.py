@@ -29,7 +29,7 @@ _M2_MIGRATIONS: list[str] = [
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS adx_14 DOUBLE",
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS stoch_rsi_k DOUBLE",
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS stoch_rsi_d DOUBLE",
-    "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS pivot DOUBLE",
+    'ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS "pivot" DOUBLE',
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS pivot_r1 DOUBLE",
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS pivot_r2 DOUBLE",
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS pivot_s1 DOUBLE",
@@ -41,6 +41,23 @@ _M2_MIGRATIONS: list[str] = [
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS ret_126d DOUBLE",
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS volume_ratio_20 DOUBLE",
     "ALTER TABLE technical_indicators ADD COLUMN IF NOT EXISTS rel_strength_63d DOUBLE",
+]
+
+
+# M3b migration: scanner_definitions table (idempotent CREATE TABLE IF NOT EXISTS).
+_M3B_MIGRATIONS: list[str] = [
+    """
+    CREATE TABLE IF NOT EXISTS scanner_definitions (
+        id            VARCHAR NOT NULL PRIMARY KEY,
+        name          VARCHAR NOT NULL,
+        owner_user_id VARCHAR,
+        plan_required VARCHAR,
+        weights       VARCHAR,
+        version       INTEGER NOT NULL DEFAULT 1,
+        validated     BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at    TIMESTAMP DEFAULT now()
+    )
+    """,
 ]
 
 
@@ -56,7 +73,7 @@ def connect(path: Path | None = None) -> duckdb.DuckDBPyConnection:
 
 
 def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
-    """Apply ``schema.sql`` then M2 column migrations (all idempotent).
+    """Apply ``schema.sql`` then M2/M3b migrations (all idempotent).
 
     Line comments are stripped before splitting on ``;`` so a semicolon inside a
     ``--`` comment is not mistaken for a statement separator.
@@ -71,6 +88,8 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         if statement.strip():
             conn.execute(statement)
     for migration in _M2_MIGRATIONS:
+        conn.execute(migration)
+    for migration in _M3B_MIGRATIONS:
         conn.execute(migration)
 
 
