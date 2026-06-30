@@ -160,7 +160,53 @@ CREATE TABLE IF NOT EXISTS scanner_definitions (
     created_at    TIMESTAMP DEFAULT now()
 );
 
+-- AI generation audit log: immutable record of every generation (docs/14 §7, SPEC §6.6).
+-- Append-only: no UPDATE or DELETE API. Every outcome (publish/suppress/degrade) writes one row.
+CREATE TABLE IF NOT EXISTS ai_audit_log (
+    audit_id              VARCHAR NOT NULL PRIMARY KEY,
+    timestamp             TIMESTAMP NOT NULL DEFAULT now(),
+    intent                VARCHAR NOT NULL,
+    agent                 VARCHAR,
+    prompt_id             VARCHAR NOT NULL,
+    prompt_version        VARCHAR NOT NULL,
+    model_tier            VARCHAR NOT NULL,
+    model_id              VARCHAR NOT NULL,
+    payload_hash          VARCHAR NOT NULL,
+    payload_json          VARCHAR NOT NULL,
+    raw_output            VARCHAR,
+    grounding_report_json VARCHAR,
+    guardrail_report_json VARCHAR,
+    compliance_decision   VARCHAR NOT NULL DEFAULT 'PASS',
+    user_visible_output   VARCHAR,
+    suppressed            BOOLEAN NOT NULL DEFAULT FALSE,
+    degraded              BOOLEAN NOT NULL DEFAULT FALSE,
+    as_of_version         VARCHAR,
+    tokens_in             INTEGER DEFAULT 0,
+    tokens_out            INTEGER DEFAULT 0,
+    cost_usd              DOUBLE DEFAULT 0.0
+);
+
+-- AI summary cache: serve cached summary when signal category is unchanged (docs/14 §3).
+CREATE TABLE IF NOT EXISTS ai_summary_cache (
+    symbol          VARCHAR NOT NULL,
+    signal_category VARCHAR NOT NULL,
+    summary         VARCHAR NOT NULL,
+    audit_id        VARCHAR NOT NULL,
+    as_of           DATE NOT NULL,
+    model_version   VARCHAR NOT NULL,
+    created_at      TIMESTAMP DEFAULT now(),
+    PRIMARY KEY (symbol, signal_category)
+);
+
+-- Daily AI call counter for the hard ceiling (docs/14 §3, SPEC §6.8).
+CREATE TABLE IF NOT EXISTS ai_daily_calls (
+    call_date  DATE NOT NULL PRIMARY KEY,
+    call_count INTEGER NOT NULL DEFAULT 0
+);
+
 -- primary_symbol is already UNIQUE (indexed); no separate index needed.
 CREATE INDEX IF NOT EXISTS idx_daily_ohlc_stock_date ON daily_ohlc (stock_id, session_date);
 CREATE INDEX IF NOT EXISTS idx_corp_actions_stock ON corporate_actions (stock_id, ex_date);
 CREATE INDEX IF NOT EXISTS idx_scanner_results_date ON scanner_results (scanner, session_date);
+CREATE INDEX IF NOT EXISTS idx_ai_audit_log_timestamp ON ai_audit_log (timestamp);
+CREATE INDEX IF NOT EXISTS idx_ai_audit_log_symbol ON ai_audit_log (intent, agent);

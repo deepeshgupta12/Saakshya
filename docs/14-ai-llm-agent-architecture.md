@@ -14,7 +14,7 @@ The full AI/LLM/agentic layer: orchestration, RAG, model abstraction, per-agent 
 4. **Guardrails enforced at output time, not just in the prompt.** The versioned blocked-phrase list runs on the generated text ([SPEC.md §3.3, §6.9](../SPEC.md), [compliance](21-compliance-risk-and-guardrails.md)).
 5. **Mode-A discipline.** No per-stock entry/target/stop, no "candidate" buy-leans, no ranked "what to buy" ([SPEC.md §3](../SPEC.md)).
 6. **Suppress, don't guess.** Missing critical inputs → the summary is suppressed, not fabricated ([SPEC.md §6.2](../SPEC.md)).
-7. **Provider abstraction + cost discipline.** Default **Claude Haiku** (`claude-haiku-4-5-20251001`) for repetitive summarization; a premium Claude model for complex synthesis ([SPEC.md §6.8, §9](../SPEC.md)). Hard monthly AI-spend ceiling, regenerate-on-change, tiering, latency budget.
+7. **Provider abstraction + cost discipline.** Local-first MVP uses **Ollama** (`qwen2.5:7b-instruct`) — zero cost, fully local (D-027). Cloud staging and production use **Claude Haiku** (`claude-haiku-4-5-20251001`) for repetitive summarization; a premium Claude model for complex synthesis ([SPEC.md §6.8, §9](../SPEC.md)). Provider is swapped via `SAAKSHYA_AI_PROVIDER` env var — no business-logic changes. Hard daily AI-call ceiling (configurable), regenerate-on-change cache, model tiering, latency budget.
 8. **SEBI AI-use disclosure (Mode B).** Under RA, AI use must be disclosed; the registered analyst remains responsible ([SPEC.md §6.7](../SPEC.md)).
 
 ---
@@ -98,19 +98,21 @@ A single `LLMProvider` interface decouples business logic from any vendor ([SPEC
 class LLMProvider(Protocol):
     def complete(self, *, prompt_id: str, prompt_version: str,
                  payload: dict, model_tier: str) -> LLMResult: ...
-    # model_tier: "cheap" -> claude-haiku-4-5-20251001
-    #             "premium" -> premium Claude model (complex synthesis)
+    # model_tier: "cheap" -> OllamaProvider (local) or claude-haiku-4-5-20251001 (cloud)
+    #             "premium" -> OllamaProvider (same model locally) or premium Claude (cloud)
 ```
 
-| Tier | Model | Use | Rationale |
+| Tier | Local-first (D-027) | Cloud staging / production | Use |
 |---|---|---|---|
-| **cheap (default)** | `claude-haiku-4-5-20251001` | Scanner explanations, per-stock summaries, repetitive daily passes | Cheapest per token; the high-volume path ([SPEC.md §6.8](../SPEC.md)) |
-| **premium** | Premium Claude model | Market brief synthesis, multi-signal portfolio reasoning, strategy/backtest interpretation | Reserved for complex synthesis only |
+| **cheap (default)** | `qwen2.5:7b-instruct` via Ollama | `claude-haiku-4-5-20251001` | Scanner explanations, per-stock summaries, repetitive daily passes |
+| **premium** | `qwen2.5:7b-instruct` via Ollama | Premium Claude model | Market brief synthesis, multi-signal reasoning, complex synthesis |
+
+Switch via `SAAKSHYA_AI_PROVIDER=anthropic` (requires `ANTHROPIC_API_KEY`). No code changes needed. (D-027)
 
 **Cost / latency controls ([SPEC.md §6.8](../SPEC.md)):**
 - **Regenerate-on-change:** re-summarize a stock only when its signal category changes; otherwise serve cached.
+- **Daily AI-call ceiling** (`ai_daily_call_ceiling=500`, configurable) with graceful degradation to non-AI templated facts from permitted vocabulary.
 - **Tiering:** full daily coverage for watched subset; on-demand + cached for the long tail (~2,000+ names).
-- **Monthly AI-spend ceiling** with alerting and graceful degradation (fall back to non-AI templated facts).
 - **Latency budget:** EOD generation finishes inside the overnight window; on-demand has a P95 target with a non-AI fallback.
 - **Prompt caching** of the static system/contract prefix where the provider supports it.
 

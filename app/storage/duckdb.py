@@ -61,6 +61,55 @@ _M3B_MIGRATIONS: list[str] = [
 ]
 
 
+
+# M4 migration: AI audit log, summary cache, and daily call counter (idempotent).
+_M4_MIGRATIONS: list[str] = [
+    """
+    CREATE TABLE IF NOT EXISTS ai_audit_log (
+        audit_id              VARCHAR NOT NULL PRIMARY KEY,
+        timestamp             TIMESTAMP NOT NULL DEFAULT now(),
+        intent                VARCHAR NOT NULL,
+        agent                 VARCHAR,
+        prompt_id             VARCHAR NOT NULL,
+        prompt_version        VARCHAR NOT NULL,
+        model_tier            VARCHAR NOT NULL,
+        model_id              VARCHAR NOT NULL,
+        payload_hash          VARCHAR NOT NULL,
+        payload_json          VARCHAR NOT NULL,
+        raw_output            VARCHAR,
+        grounding_report_json VARCHAR,
+        guardrail_report_json VARCHAR,
+        compliance_decision   VARCHAR NOT NULL DEFAULT 'PASS',
+        user_visible_output   VARCHAR,
+        suppressed            BOOLEAN NOT NULL DEFAULT FALSE,
+        degraded              BOOLEAN NOT NULL DEFAULT FALSE,
+        as_of_version         VARCHAR,
+        tokens_in             INTEGER DEFAULT 0,
+        tokens_out            INTEGER DEFAULT 0,
+        cost_usd              DOUBLE DEFAULT 0.0
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_summary_cache (
+        symbol          VARCHAR NOT NULL,
+        signal_category VARCHAR NOT NULL,
+        summary         VARCHAR NOT NULL,
+        audit_id        VARCHAR NOT NULL,
+        as_of           DATE NOT NULL,
+        model_version   VARCHAR NOT NULL,
+        created_at      TIMESTAMP DEFAULT now(),
+        PRIMARY KEY (symbol, signal_category)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_daily_calls (
+        call_date  DATE NOT NULL PRIMARY KEY,
+        call_count INTEGER NOT NULL DEFAULT 0
+    )
+    """,
+]
+
+
 def connect(path: Path | None = None) -> duckdb.DuckDBPyConnection:
     """Open (creating the parent dir if needed) a DuckDB connection to ``path``.
 
@@ -90,6 +139,8 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     for migration in _M2_MIGRATIONS:
         conn.execute(migration)
     for migration in _M3B_MIGRATIONS:
+        conn.execute(migration)
+    for migration in _M4_MIGRATIONS:
         conn.execute(migration)
 
 

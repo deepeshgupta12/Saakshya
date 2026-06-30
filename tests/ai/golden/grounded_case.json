@@ -1,0 +1,36 @@
+{
+  "description": "Grounded summary matching the SPEC §5 worked example. Should pass all checks.",
+  "payload": {
+    "intent": "explain_scanner_result",
+    "asOfDate": "2026-06-26",
+    "asOfVersion": "ds-2026-06-26T20:15:00Z",
+    "subject": {"type": "stock", "symbol": "TATAMOTORS.NS"},
+    "computed": {
+      "scanner": "momentum",
+      "compositeScore": 87.4,
+      "subScores": {"priceMomentum": 92.1, "maTrend": 88.0},
+      "facts": {
+        "ret_3m_pct": 21.4,
+        "close": 980.0,
+        "sma50": 882.0,
+        "vol_ratio": 2.4,
+        "atr_pct": 3.4
+      }
+    },
+    "signalTags": ["MOMENTUM_STRONG", "ABOVE_50DMA"],
+    "riskFlags": ["ELEVATED_VOLATILITY"],
+    "dataConfidence": "HIGH",
+    "permittedVocabulary": {
+      "MOMENTUM_STRONG": "appears in the momentum scanner",
+      "ABOVE_50DMA": "trading above its 50-day moving average",
+      "ELEVATED_VOLATILITY": "short-term volatility is elevated"
+    },
+    "modeContext": "A"
+  },
+  "test_output": "TATAMOTORS.NS has risen 21.4% over the past three months and trades above its 50-day moving average. Volume has expanded roughly 2.4 times its 20-day average. Short-term volatility is elevated, with ATR at 3.4% of price. Not investment advice.",
+  "expected_properties": {
+    "grounding_should_pass": true,
+    "guardrail_should_pass": true,
+    "suppressed": false
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "description": "Fabricated output: claims ret_3m_pct=35.0 but payload has 21.4. Grounding MUST fail.",
+  "payload": {
+    "intent": "explain_scanner_result",
+    "asOfDate": "2026-06-26",
+    "asOfVersion": "ds-2026-06-26T20:15:00Z",
+    "subject": {"type": "stock", "symbol": "TATAMOTORS.NS"},
+    "computed": {
+      "scanner": "momentum",
+      "compositeScore": 87.4,
+      "subScores": {},
+      "facts": {
+        "ret_3m_pct": 21.4,
+        "close": 980.0,
+        "sma50": 882.0,
+        "vol_ratio": 2.4,
+        "atr_pct": 3.4
+      }
+    },
+    "signalTags": ["MOMENTUM_STRONG"],
+    "riskFlags": [],
+    "dataConfidence": "HIGH",
+    "permittedVocabulary": {
+      "MOMENTUM_STRONG": "appears in the momentum scanner"
+    },
+    "modeContext": "A"
+  },
+  "test_output": "TATAMOTORS.NS has risen 35.0% over the past three months. The price target is 1200. Buy now.",
+  "expected_properties": {
+    "grounding_should_pass": false,
+    "guardrail_should_pass": false,
+    "suppressed": false
+  }
+}

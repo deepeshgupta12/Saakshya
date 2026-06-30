@@ -36,8 +36,18 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=REPO_ROOT / "data")
     universe_path: Path = Field(default=REPO_ROOT / "data" / "universe.csv")
 
-    # AI layer (used from M4). Default is the local cheap tier (SPEC §14.4).
-    model_version: str = Field(default="claude-haiku-4-5-20251001")
+    # AI layer — provider + model config (M4, docs/14 §3, D-027).
+    # Default: Ollama with qwen2.5:7b-instruct (local, no API key needed).
+    # Set SAAKSHYA_AI_PROVIDER=anthropic to use Claude Haiku via ANTHROPIC_API_KEY.
+    ai_provider: str = Field(default="ollama")
+    ai_ollama_base_url: str = Field(default="http://localhost:11434")
+    ai_ollama_model_cheap: str = Field(default="qwen2.5:7b-instruct")
+    ai_ollama_model_premium: str = Field(default="qwen2.5:7b-instruct")
+    ai_daily_call_ceiling: int = Field(default=500)
+    ai_max_regen: int = Field(default=2)
+    ai_model_tier_default: str = Field(default="cheap")
+    # Legacy: kept for backwards compat; new code uses ai_ollama_model_cheap/premium.
+    model_version: str = Field(default="qwen2.5:7b-instruct")
 
     # Data source selection + fetch window.
     active_data_source: str = Field(default="yfinance")

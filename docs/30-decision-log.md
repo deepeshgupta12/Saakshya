@@ -255,6 +255,15 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** Storage layer + pipeline; no change to indicator semantics.
 - **Status:** Accepted
 
+### D-027 — Default AI provider: Ollama (`qwen2.5:7b-instruct`) replaces Claude Haiku for local-first MVP
+- **Date:** 2026-06-30
+- **Context:** SPEC §12 mandates local-first validation on one M1 Mac before any cloud spend. CLAUDE.md §7 names Claude Haiku (`claude-haiku-4-5-20251001`) as the default repetitive-summarization model. The dev machine has no network access to Anthropic's API (network block); it does have Ollama 0.20.6 with `qwen2.5:7b-instruct` (4.7 GB) locally installed. Using the cloud API in local-first phase would also incur per-call cost, contrary to the "zero cloud spend to validate" thesis.
+- **Alternatives considered:** Keep Claude Haiku as default (network-blocked, incurs cost, violates local-first); use OpenAI (same network/cost objection); add a mock provider (no real grounding verification signal); use Ollama (local, zero cost, same OpenAI-compatible REST interface, production code path exercised).
+- **Final decision:** `OllamaProvider` becomes the default provider in `app/ai/provider.py`. `Settings.ai_provider` defaults to `"ollama"`, `ai_ollama_base_url` to `http://localhost:11434`, `ai_ollama_model_cheap` and `ai_ollama_model_premium` both to `qwen2.5:7b-instruct`. The `LLMProvider` protocol abstraction means switching to Claude Haiku in production (Mode B or cloud staging) is a single env-var change (`SAAKSHYA_AI_PROVIDER=anthropic`); no business-logic code changes. The verification harness and guardrail are applied identically regardless of provider — their criticality is **higher** with a local model (higher hallucination risk), making the suppress-not-guess default essential.
+- **Owner:** AI/ML + Engineering
+- **Impact:** `app/ai/provider.py`, `app/config.py`; zero impact on `explainer.py`, `verify.py`, `guardrail.py` (fully provider-agnostic). Cost is 0.0 USD per call locally. Provider can be swapped at deploy time.
+- **Status:** Accepted (supersedes the "Claude Haiku default" aspect of D-011; Ollama remains the local-first default until cloud staging begins)
+
 ---
 
 ## 2. Decision index
@@ -271,7 +280,7 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-008 | 2026-06-29 | FastAPI backend | Backend | API/orchestration | Accepted |
 | D-009 | 2026-06-29 | Postgres+TimescaleDB prod / DuckDB local | Data/Backend | Storage/migrations | Provisional |
 | D-010 | 2026-06-29 | LangGraph/LlamaIndex AI architecture | AI/ML | Agents/RAG | Accepted |
-| D-011 | 2026-06-29 | Default model Claude Haiku | AI/ML | Cost/latency | Provisional |
+| D-011 | 2026-06-29 | Default model Claude Haiku (production target; superseded locally by D-027) | AI/ML | Cost/latency | Provisional |
 | D-012 | 2026-06-29 | Corp-action adjustment as first-class workstream | Data Eng | Indicators/backtest | Accepted |
 | D-013 | 2026-06-29 | Scanner-score validation (M3b) gating spike | Quant | Whole product | Open |
 | D-014 | 2026-06-29 | GitNexus knowledge-graph adoption | Eng/Tooling | Agentic workflow | Accepted |
@@ -287,6 +296,7 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-024 | 2026-06-30 | Weights stamped weights-v1-hypothesis / PENDING_M3B; composite not wired to UI | Quant/Eng + Product | All scanners / UI gate | Accepted |
 | D-025 | 2026-06-30 | M3b: GateConfig v1 thresholds (ρ≥0.6, IC t-stat≥1.5); scipy 1.14.1 added | Quant/Eng | Composite UI gate | Accepted (verdict pending — yfinance network-blocked on dev machine) |
 | D-026 | 2026-06-30 | DuckDB reserved keyword: `pivot` must be double-quoted in all SQL | Engineering | Storage/pipeline | Accepted |
+| D-027 | 2026-06-30 | Default AI provider: Ollama (`qwen2.5:7b-instruct`) replaces Claude Haiku for local-first MVP | AI/ML | Provider abstraction / cost | Accepted |
 
 ---
 

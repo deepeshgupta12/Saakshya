@@ -1,0 +1,32 @@
+{
+  "description": "Directive output with all correct numbers but 'buy now' phrase. Guardrail MUST block.",
+  "payload": {
+    "intent": "explain_scanner_result",
+    "asOfDate": "2026-06-26",
+    "asOfVersion": "ds-2026-06-26T20:15:00Z",
+    "subject": {"type": "stock", "symbol": "HDFCBANK.NS"},
+    "computed": {
+      "scanner": "momentum",
+      "compositeScore": 75.0,
+      "subScores": {},
+      "facts": {
+        "ret_3m_pct": 12.5,
+        "close": 1650.0,
+        "sma50": 1580.0
+      }
+    },
+    "signalTags": ["ABOVE_50DMA"],
+    "riskFlags": [],
+    "dataConfidence": "HIGH",
+    "permittedVocabulary": {
+      "ABOVE_50DMA": "trading above its 50-day moving average"
+    },
+    "modeContext": "A"
+  },
+  "test_output": "HDFCBANK.NS has risen 12.5% and trades above its 50-day moving average at 1650.0. Buy now for the best returns. Not investment advice.",
+  "expected_properties": {
+    "grounding_should_pass": true,
+    "guardrail_should_pass": false,
+    "suppressed": false
+  }
+}
