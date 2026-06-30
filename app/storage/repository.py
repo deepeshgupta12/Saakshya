@@ -312,3 +312,104 @@ class Repository:
                 log.check_type, log.severity, log.status, log.detail,
             ],
         )
+
+    # --- technical indicators -------------------------------------------
+    def get_indicators_for_date(
+        self,
+        session_date: date,
+        as_of_version: int = 1,
+    ) -> list[dict[str, object]]:
+        """All indicator rows for a session date (one per stock, latest indicator_version).
+
+        Returns a list of dicts keyed by column name, including stock_id and
+        primary_symbol for scanner use.
+        """
+        rows = self._conn.execute(
+            "SELECT ti.stock_id, sm.primary_symbol, "
+            "ti.rsi_14, ti.sma_20, ti.sma_50, ti.sma_200, ti.ema_21, ti.atr_14, "
+            "ti.macd_line, ti.macd_signal, ti.bb_upper, ti.bb_mid, ti.bb_lower, "
+            "ti.adx_14, ti.stoch_rsi_k, ti.stoch_rsi_d, "
+            "ti.pivot, ti.pivot_r1, ti.pivot_r2, ti.pivot_s1, ti.pivot_s2, "
+            "ti.vwap, ti.ret_5d, ti.ret_21d, ti.ret_63d, ti.ret_126d, "
+            "ti.volume_ratio_20, ti.rel_strength_63d "
+            "FROM technical_indicators ti "
+            "JOIN stock_master sm ON sm.stock_id = ti.stock_id "
+            "WHERE ti.session_date = ? AND ti.as_of_version = ? "
+            "QUALIFY row_number() OVER "
+            "  (PARTITION BY ti.stock_id ORDER BY ti.indicator_version DESC) = 1",
+            [session_date, as_of_version],
+        ).fetchall()
+
+        cols = [
+            "stock_id", "symbol",
+            "rsi_14", "sma_20", "sma_50", "sma_200", "ema_21", "atr_14",
+            "macd_line", "macd_signal", "bb_upper", "bb_mid", "bb_lower",
+            "adx_14", "stoch_rsi_k", "stoch_rsi_d",
+            "pivot", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2",
+            "vwap", "ret_5d", "ret_21d", "ret_63d", "ret_126d",
+            "volume_ratio_20", "rel_strength_63d",
+        ]
+        return [dict(zip(cols, r, strict=True)) for r in rows]
+
+    def count_indicators(self, session_date: date | None = None) -> int:
+        if session_date is None:
+            row = self._conn.execute(
+                "SELECT count(*) FROM technical_indicators"
+            ).fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT count(*) FROM technical_indicators WHERE session_date=?",
+                [session_date],
+            ).fetchone()
+        assert row is not None
+        return int(row[0])
+
+    # --- scanner results ------------------------------------------------
+    def upsert_scanner_result(
+        self,
+        scanner: str,
+        stock_id: int,
+        session_date: date,
+        composite_score: float | None,
+        sub_scores_json: str,
+        facts_json: str,
+        signal_tags_json: str,
+        risk_flags_json: str,
+        data_confidence: str,
+        weights_version: str,
+        validation_status: str,
+        as_of_version: int,
+        engine_version: str,
+    ) -> None:
+        self._conn.execute(
+            "INSERT INTO scanner_results "
+            "(scanner, stock_id, session_date, composite_score, sub_scores, facts, "
+            "signal_tags, risk_flags, data_confidence, weights_version, validation_status, "
+            "as_of_version, engine_version) "
+            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT (scanner, stock_id, session_date, as_of_version) DO UPDATE SET "
+            "composite_score=excluded.composite_score, sub_scores=excluded.sub_scores, "
+            "facts=excluded.facts, signal_tags=excluded.signal_tags, "
+            "risk_flags=excluded.risk_flags, data_confidence=excluded.data_confidence, "
+            "weights_version=excluded.weights_version, "
+            "validation_status=excluded.validation_status, "
+            "engine_version=excluded.engine_version, computed_at=now()",
+            [
+                scanner, stock_id, session_date, composite_score,
+                sub_scores_json, facts_json, signal_tags_json, risk_flags_json,
+                data_confidence, weights_version, validation_status,
+                as_of_version, engine_version,
+            ],
+        )
+
+    def count_scanner_results(self, scanner: str | None = None) -> int:
+        if scanner is None:
+            row = self._conn.execute(
+                "SELECT count(*) FROM scanner_results"
+            ).fetchone()
+        else:
+            row = self._conn.execute(
+                "SELECT count(*) FROM scanner_results WHERE scanner=?", [scanner]
+            ).fetchone()
+        assert row is not None
+        return int(row[0])

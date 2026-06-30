@@ -1,4 +1,4 @@
-"""M0/M1 ingest pipeline: universe → source → DuckDB (raw + adjusted OHLCV).
+"""EOD ingest + compute pipeline: universe → source → DuckDB → indicators → scanners.
 
 Pipeline stages (docs/12 §1):
   M0  1. Seed the universe (stock_master + exchange_symbols)
@@ -14,7 +14,9 @@ Pipeline stages (docs/12 §1):
          flag mismatches to data_quality_logs
       9. Check for abnormal price jumps not explained by a corp action → quarantine
 
-Compute (M2) and scan (M3) stages are added in later milestones.
+  M2 10. Compute all vectorized indicators per stock (RSI/SMA/EMA/ATR/MACD/Bollinger/
+         ADX/Stoch RSI/Pivots/returns/volume_ratio/relative_strength) and persist to
+         technical_indicators (SPEC §12 M2)
 """
 
 from __future__ import annotations
@@ -28,6 +30,7 @@ from app.data.corp_action_adjuster import AdjustSummary, adjust_all
 from app.data.corp_actions import ingest_corp_actions
 from app.data.normalize import to_bars
 from app.data.universe import load_universe, seed_universe
+from app.indicators.compute import ComputeSummary, compute_all
 from app.storage.duckdb import get_connection
 from app.storage.repository import DataQualityLog, Repository
 
@@ -47,6 +50,7 @@ class IngestSummary:
     symbols_with_data: int
     corp_actions_ingested: int = 0
     adjust: AdjustSummary | None = None
+    compute: ComputeSummary | None = None
     unmapped: list[str] = field(default_factory=list)
     empty_symbols: list[str] = field(default_factory=list)
 
@@ -112,6 +116,9 @@ def run_ingest(limit: int | None = None, period: str | None = None) -> IngestSum
             job_id=_JOB_ID_ADJUST,
         )
 
+        # ── M2: compute indicators for all stocks ─────────────────────────
+        compute_summary = compute_all(repo, as_of_version=_AS_OF_VERSION)
+
         return IngestSummary(
             source=source.name,
             symbols=len(entries),
@@ -119,6 +126,7 @@ def run_ingest(limit: int | None = None, period: str | None = None) -> IngestSum
             symbols_with_data=len(landed),
             corp_actions_ingested=ca_count,
             adjust=adj_summary,
+            compute=compute_summary,
             unmapped=unmapped,
             empty_symbols=empty,
         )

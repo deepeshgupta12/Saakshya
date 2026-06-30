@@ -15,6 +15,13 @@ target-version = "py311"
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["UP017"]  # keep `timezone.utc` (works on 3.10 dev sandboxes; target is 3.11)
 
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.ruff.lint.per-file-ignores]
+"app/indicators/compute.py" = ["I001"]
+"tests/scanners/test_scanner_language.py" = ["I001"]
+
 [tool.mypy]
 python_version = "3.11"
 strict = true

@@ -183,6 +183,60 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** Ingestion source path (prototype), production data-licensing/cost; redistribution-rights remains an open procurement gate for production launch.
 - **Status:** Deferred (intentional; SPEC §13 "Data vendor + redistribution rights" remains a tracked open procurement item)
 
+### D-019 — RSI implementation: pure EWM initialization (not SMA-init Wilder)
+- **Date:** 2026-06-30
+- **Context:** Two common RSI implementations exist: (a) SMA of first N gains/losses as the seed then Wilder smoothing (the original Wilder 1978 text), and (b) pure EWM with `alpha=1/period` from bar 0 (vectorized pandas `ewm(com=period-1, adjust=False)`). They converge after ~3× the period but diverge in the warmup window.
+- **Alternatives considered:** Wilder SMA-init (requires a Python loop or two-pass pandas which is not vectorized); pure EWM from bar 0 (fully vectorized, pandas-native).
+- **Final decision:** Use **pure EWM** (`ewm(com=period-1, min_periods=period, adjust=False)`). SPEC §9 mandates vectorized implementations; the divergence from SMA-init is negligible after ~42 bars (3× period=14) and does not affect any scanner decision boundary. Documented in `test_rsi_golden_ewm` with an analytically exact golden value (13 drops + 1 rise → RSI = 100/14). **Not TA-Lib-compatible** — known and acceptable.
+- **Owner:** Quant/Engineering
+- **Impact:** Indicators module (`app/indicators/core.py`); golden test value is 100/14 ≈ 7.143, not the SMA-init Wilder value. Comparisons with external tools may differ in the first ~42 bars.
+- **Status:** Accepted
+
+### D-020 — volume_ratio_20: compare today's volume to the PRIOR 20-day average (shift(1))
+- **Date:** 2026-06-30
+- **Context:** `rolling(20).mean()` without shift uses the current bar in the denominator, which inflates the average when today is a volume spike — defeating the purpose of the ratio for breakout detection.
+- **Alternatives considered:** `rolling(20).mean()` including current bar (standard rolling average — wrong for this use case); `rolling(20).mean().shift(1)` (prior period average — correct semantics).
+- **Final decision:** Use **`shift(1)`** — `volume_ratio_20 = volume / rolling(20).mean().shift(1)`. First valid bar is bar 20 (0-indexed). This gives `ratio = 3.0` when today's volume is 3× the prior 20-day average, matching the intended scanner interpretation.
+- **Owner:** Quant/Engineering
+- **Impact:** `app/indicators/returns.py`; warmup is 20 bars (not 19); golden test is 3000/1000 = 3.0.
+- **Status:** Accepted
+
+### D-021 — NEUTRAL sentinel: `float("nan")` for missing scanner sub-scores
+- **Date:** 2026-06-30
+- **Context:** Missing sub-scores (e.g. sectorStrength not yet computed, delivery data absent) must be excluded from the composite with weight redistributed pro-rata — not penalized as zero.
+- **Alternatives considered:** `None` (forces Optional typing everywhere); `-1` sentinel (could collide with valid negative scores); a dedicated enum class (over-engineered for v1).
+- **Final decision:** Use **`float("nan")`** as the NEUTRAL sentinel. All sub-score types are `float`, `math.isnan()` checks are clean, and pandas naturally propagates NaN through arithmetic. The `is_neutral()` helper in `normalize.py` is the canonical check.
+- **Owner:** Engineering
+- **Impact:** `app/scanners/normalize.py`, `composite.py`, every scanner; all sub-scores are `float` (never Optional or int).
+- **Status:** Accepted
+
+### D-022 — Schema migration: M2 indicator columns via idempotent ALTER TABLE ADD COLUMN IF NOT EXISTS
+- **Date:** 2026-06-30
+- **Context:** `technical_indicators` was created in M0/M1 with only base columns. Adding 26 indicator columns in M2 without breaking existing DuckDB installs required a migration strategy.
+- **Alternatives considered:** DROP and recreate the table (loses existing M0/M1 data); a Flyway/Alembic migration tool (over-engineered for a local-first DuckDB single-file prototype); idempotent `ALTER TABLE ADD COLUMN IF NOT EXISTS` run after schema.sql (simple, safe, repeatable).
+- **Final decision:** Use a `_M2_MIGRATIONS` list of `ALTER TABLE ADD COLUMN IF NOT EXISTS` statements in `duckdb.py`, run in `init_schema()` after the base schema. Idempotent — safe for fresh installs and existing M0/M1 installs.
+- **Owner:** Engineering
+- **Impact:** `app/storage/duckdb.py`; migration strategy for local-first DuckDB.
+- **Status:** Accepted
+
+### D-023 — VWAP deferred to V7 (intraday only); column exists but is always NULL in EOD mode
+- **Date:** 2026-06-30
+- **Context:** VWAP is computed from intraday tick/OHLCV data. With one EOD bar per day, VWAP would simply equal the adjusted close — meaningless. The `technical_indicators.vwap` column exists in the schema for forward compatibility.
+- **Alternatives considered:** Remove the column entirely (breaks schema forward-compat); compute a synthetic VWAP from OHLC (misleading — not how VWAP is used); defer to V7 intraday milestone (chosen).
+- **Final decision:** The `vwap` column is **always NULL in EOD mode**. No scanner/payload/AI may reference VWAP until V7. Documented in schema comments and `compute.py`.
+- **Owner:** Quant/Engineering
+- **Impact:** `app/indicators/compute.py`; V7 intraday milestone; any AI prompt that mentions VWAP must be blocked until then.
+- **Status:** Accepted
+
+### D-024 — Scanner weights stamped `weights-v1-hypothesis`, `validationStatus=PENDING_M3B`
+- **Date:** 2026-06-30
+- **Context:** The v1 composite weights (priceMomentum 25%, volumeExpansion 20%, maTrend 15%, sectorStrength 15%, rsiHealth 10%, newsSentiment 10%, riskAdjustment 5%) are a reasonable starting hypothesis but are NOT validated. Wiring the composite to any UI before validation risks shipping a "horoscope" (SPEC §6.5, D-013).
+- **Alternatives considered:** Ship equal weights (also unvalidated but less misleading); defer the whole composite until M3b (loses the M3 deliverable); ship with a clear "hypothesis" stamp and gate the UI on M3b.
+- **Final decision:** Stamp every scanner result with `weightsVersion="weights-v1-hypothesis"` and `validationStatus="PENDING_M3B"`. The blended composite is computed and stored but **not wired to any UI** until M3b validation ([03-scanner-score-validation.md](03-scanner-score-validation.md)) passes.
+- **Owner:** Quant/Engineering + Product
+- **Impact:** All four scanners; UI integration gate; M3b validation workstream.
+- **Status:** Accepted (PENDING_M3B — revisit after D-013 spike completes)
+
 ---
 
 ## 2. Decision index
@@ -207,6 +261,12 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-016 | 2026-06-29 | Build-vs-buy news/sentiment feed → BUILD in-house | AI/ML + Data Eng | News-sentiment/entity resolution | Decided |
 | D-017 | 2026-06-29 | Personalization line: complete scope, advisory tier IA-gated | Product + Compliance | Personalization/preferences/Mode-C gating | Decided |
 | D-018 | 2026-06-29 | Data vendor + redistribution rights → DEFERRED (prototype on yfinance + NSE Bhavcopy) | Product + Data + Counsel | Ingestion source / data-licensing | Deferred |
+| D-019 | 2026-06-30 | RSI: pure EWM initialization (vectorized, not SMA-init Wilder) | Quant/Eng | Indicators/tests | Accepted |
+| D-020 | 2026-06-30 | volume_ratio_20: compare to PRIOR 20-day average (shift(1)) | Quant/Eng | Indicators/scanners | Accepted |
+| D-021 | 2026-06-30 | NEUTRAL sentinel = float("nan") for missing sub-scores | Engineering | All scanners / normalize | Accepted |
+| D-022 | 2026-06-30 | M2 migration: idempotent ALTER TABLE ADD COLUMN IF NOT EXISTS | Engineering | duckdb.py / storage | Accepted |
+| D-023 | 2026-06-30 | VWAP deferred to V7 (intraday only); column always NULL in EOD | Quant/Eng | indicators/schema | Accepted |
+| D-024 | 2026-06-30 | Weights stamped weights-v1-hypothesis / PENDING_M3B; composite not wired to UI | Quant/Eng + Product | All scanners / UI gate | Accepted |
 
 ---
 
@@ -221,7 +281,7 @@ Items still **Open** block specific downstream work (tracked canonically in SPEC
 | Build vs buy: news/sentiment feed | Phase 2 | **D-016 — Decided: BUILD in-house** |
 | Scanner scoring weights + validation method | Phase 1 scanners | D-013 (Open) |
 | AI cost ceiling + caching policy | Phase 2 AI | D-011 (Provisional) |
-| Indicators: vectorized/pandas-ta vs TA-Lib | Local M2 | (resolved: avoid TA-Lib — record on adoption) |
+| Indicators: vectorized/pandas-ta vs TA-Lib | Local M2 | **D-019/D-020 — Decided: pure vectorized pandas/NumPy; no TA-Lib** (RSI: EWM init; volume_ratio: shift(1)) |
 | Personalization line (A vs C) | Phase 3+ | **D-017 — Decided** (complete scope; navigation-only in Mode A, advisory tier IA-gated/Mode C, SPEC §7) |
 
 ---

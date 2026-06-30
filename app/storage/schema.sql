@@ -124,6 +124,31 @@ CREATE TABLE IF NOT EXISTS data_quality_logs (
     created_at   TIMESTAMP DEFAULT now()
 );
 
+-- Scanner results: one row per (scanner, stock, session, as_of_version).
+-- sub_scores/facts/signal_tags/risk_flags stored as JSON strings.
+-- Composite gated on validationStatus = VALIDATED before any UI (SPEC §6.5, docs/13 §3.3).
+CREATE SEQUENCE IF NOT EXISTS seq_scanner_result_id START 1;
+
+CREATE TABLE IF NOT EXISTS scanner_results (
+    result_id         BIGINT DEFAULT nextval('seq_scanner_result_id') PRIMARY KEY,
+    scanner           VARCHAR NOT NULL,
+    stock_id          BIGINT NOT NULL,
+    session_date      DATE NOT NULL,
+    composite_score   DOUBLE,
+    sub_scores        VARCHAR,
+    facts             VARCHAR,
+    signal_tags       VARCHAR,
+    risk_flags        VARCHAR,
+    data_confidence   VARCHAR NOT NULL DEFAULT 'MEDIUM',
+    weights_version   VARCHAR NOT NULL DEFAULT 'weights-v1-hypothesis',
+    validation_status VARCHAR NOT NULL DEFAULT 'PENDING_M3B',
+    as_of_version     INTEGER NOT NULL DEFAULT 1,
+    engine_version    VARCHAR NOT NULL DEFAULT '1.0.0',
+    computed_at       TIMESTAMP DEFAULT now(),
+    UNIQUE (scanner, stock_id, session_date, as_of_version)
+);
+
 -- primary_symbol is already UNIQUE (indexed); no separate index needed.
 CREATE INDEX IF NOT EXISTS idx_daily_ohlc_stock_date ON daily_ohlc (stock_id, session_date);
 CREATE INDEX IF NOT EXISTS idx_corp_actions_stock ON corporate_actions (stock_id, ex_date);
+CREATE INDEX IF NOT EXISTS idx_scanner_results_date ON scanner_results (scanner, session_date);
