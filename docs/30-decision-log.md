@@ -284,6 +284,52 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 
 ---
 
+### D-030 — Tailwind v4: `@theme inline` CSS-variable mapping replaces `tailwind.config.ts`
+- **Date:** 2026-06-30
+- **Context:** M6 frontend uses Tailwind v4 (4.x). Tailwind v4 deprecated `tailwind.config.ts` in favour of a CSS-first config model. Theme values must be declared via `@theme` or `@theme inline` inside `globals.css`.
+- **Alternatives considered:** Downgrade to Tailwind v3 (stable `tailwind.config.ts`); use `@theme` with inlined raw hex values; use `@theme inline` with CSS variable references.
+- **Final decision:** Use `@theme inline { --color-*: var(--*) }` so that Tailwind utility classes (`bg-surface-1`, `text-bullish`, etc.) reference the CSS custom properties at runtime. This enables instant dark/light switching via `data-theme` attribute without JS recompilation. All semantic token names from `docs/07 §1` are preserved.
+- **Owner:** Frontend
+- **Impact:** `web/app/globals.css`, `web/src/styles/tokens.css` — all component authors use semantic Tailwind utilities only, never raw hex.
+- **Status:** Accepted
+
+### D-031 — Zod v4 breaking changes: `z.record()` 2-arg, `z.enum()` removed, `z.string()` for enum fields
+- **Date:** 2026-06-30
+- **Context:** Zod v4 (4.x) has two breaking API changes relevant to M6 schemas: (1) `z.record(valueSchema)` is no longer valid — `z.record(z.string(), valueSchema)` is required; (2) `z.enum(["A","B"])` requires a tuple literal or the Zod v4 `z.enum([...] as const, ...)` overload, which doesn't match the TS overload signatures cleanly in strict mode.
+- **Alternatives considered:** Pin Zod to v3; use `z.enum()` with `as const` tuple — hits type inference issues in strict TS; replace with `z.string()` and cast in the client layer.
+- **Final decision:** (1) All `z.record()` calls use 2 arguments; (2) all API enum fields (`data_confidence`, `cache`) use `z.string()`, with explicit `as SomeType["field"]` casts in `client.ts` where the TypeScript type constrains the string. No runtime behavior change; type safety is maintained end-to-end via the client mapping layer.
+- **Owner:** Frontend
+- **Impact:** `web/src/lib/api/schemas.ts`, `web/src/lib/api/client.ts`, `web/src/types/index.ts`.
+- **Status:** Accepted
+
+### D-032 — Lightweight Charts v5: `chart.addSeries(SeriesType, opts)` replaces named series methods
+- **Date:** 2026-06-30
+- **Context:** TradingView Lightweight Charts v5 (5.x) removed `chart.addCandlestickSeries()`, `chart.addLineSeries()`, and `chart.addHistogramSeries()`. The v5 API uses a generic `chart.addSeries(SeriesType, options)` with named series type imports (`CandlestickSeries`, `LineSeries`, `HistogramSeries`) from the package root.
+- **Alternatives considered:** Pin to lightweight-charts v4 (stable named methods); upgrade and migrate (1–2 call sites).
+- **Final decision:** Use v5 with the `addSeries(SeriesType, opts)` pattern throughout `PriceChartImpl.tsx`. Since we're already on v5 in `package.json`, migrating is correct; locking to v4 would be technical debt immediately.
+- **Owner:** Frontend
+- **Impact:** `web/src/components/charts/PriceChartImpl.tsx` — all series creation uses the v5 API.
+- **Status:** Accepted
+
+### D-033 — ui-ux-pro-max design system: Modern Dark Cinema style, JetBrains Mono, spring physics, stagger animations
+- **Date:** 2026-06-30
+- **Context:** The M6 frontend was initially built without invoking the `ui-ux-pro-max` design skill. All components were functional but lacked the premium, evidence-led aesthetic required by docs/07. A dedicated design-upgrade pass was performed using the skill's "Modern Dark Cinema" style (glassmorphism, radial gradients, depth layering) with the Saakshya design system persisted to `design-system/saakshya/MASTER.md`.
+- **Alternatives considered:** Keep basic Tailwind styling; use a different style (Neumorphic, Claymorphic); use an existing component library (shadcn-ui default theme).
+- **Final decision:** Adopt the ui-ux-pro-max "Modern Dark Cinema" style palette with the following binding decisions:
+  - **JetBrains Mono** (via `next/font/google`) for all prices, scores, metrics, and data values; wired as `--font-mono-code` CSS variable.
+  - **Spring physics** for all interactive transitions: `damping: 32, stiffness: 300, mass: 0.85` (drawers); `damping: 24, stiffness: 260` (tiles); `damping: 28, stiffness: 400` (snappy actions).
+  - **Expo-out easing** `[0.16, 1, 0.3, 1]` for content reveals; exit at ~65% of enter duration.
+  - **Stagger sequences**: 30–40ms per item, capped ~300ms total; `staggerContainer` + `staggerRow`/`staggerTile` variants.
+  - **AI violet accent** (`--ai: #9A7BFF`): left-border rule `[3px]` + radial gradient glow overlay on all AI cards.
+  - **`useReducedMotion()` respected** throughout — all count-up, stagger, and spring animations skip or show final state when reduced-motion is active.
+  - **Min touch targets 44px** (`min-h-[44px]`, `cursor-pointer`, `touch-action: manipulation`) on all interactive elements.
+  - **Skip-link** + `aria-current="page"` + `aria-live="polite"` on `NotAdviceBanner` for accessibility.
+- **Owner:** Frontend
+- **Impact:** All files in `web/src/components/` (ui, layout, market, scanner, stock, compliance, charts); `web/src/lib/motion/variants.ts`; `web/app/layout.tsx`; `design-system/saakshya/MASTER.md`.
+- **Status:** Accepted
+
+---
+
 ## 2. Decision index
 
 | ID | Date | Decision | Owner | Impact | Status |
@@ -317,6 +363,10 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-027 | 2026-06-30 | Default AI provider: Ollama (`qwen2.5:7b-instruct`) replaces Claude Haiku for local-first MVP | AI/ML | Provider abstraction / cost | Accepted |
 | D-028 | 2026-06-30 | M5 rate-limiter: in-process token bucket (no Redis) for local-first | Engineering | API / ops | Accepted |
 | D-029 | 2026-06-30 | `do` reserved in DuckDB — use `ohlc` alias in all daily_ohlc JOINs | Engineering | Storage / all JOIN queries | Accepted |
+| D-030 | 2026-06-30 | Tailwind v4 theming: `@theme inline` CSS-var references (no `tailwind.config.ts`) | Frontend | Design tokens / runtime switching | Accepted |
+| D-031 | 2026-06-30 | Zod v4 API changes: `z.record()` requires 2 args (key+value); `z.enum()` requires tuple; all API schemas use `z.string()` + explicit casts | Frontend | API client / Zod schemas | Accepted |
+| D-032 | 2026-06-30 | Lightweight Charts v5: series created via `chart.addSeries(SeriesType, opts)` — `addCandlestickSeries` / `addLineSeries` etc. removed | Frontend | PriceChartImpl | Accepted |
+| D-033 | 2026-06-30 | ui-ux-pro-max design adoption: Modern Dark Cinema, JetBrains Mono, spring physics, stagger, AI violet accent, a11y (skip-link, aria-current, reduced-motion) | Frontend | All web components, motion variants, layout | Accepted |
 
 ---
 

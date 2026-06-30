@@ -3,7 +3,7 @@
 > Read first: [SPEC.md](../../SPEC.md) · [Roadmap](../02-product-roadmap.md) · [Frontend Architecture](../06-frontend-architecture.md) · [Design System & UI/UX](../07-design-system-and-ui-ux.md) · [Screen-by-Screen](../08-screen-by-screen-documentation.md) · [IA & URL Paths](../05-information-architecture-and-url-paths.md) · [API Contracts](../10-api-contracts.md) · [Compliance & Guardrails](../21-compliance-risk-and-guardrails.md)
 
 **Maps to:** Roadmap V1 (UI) · SPEC Phase 1 · Local milestone M6
-**Status:** Not started   |   **Regulatory mode:** A
+**Status:** Complete (M6 — 2026-06-30)   |   **Regulatory mode:** A
 **Prerequisites:** [05-api-and-pipeline.md](05-api-and-pipeline.md) (M5 endpoints live) · [04-ai-explanation-layer.md](04-ai-explanation-layer.md) (grounded AI + blocked-phrase export)
 
 ## Overview
