@@ -413,3 +413,213 @@ class Repository:
             ).fetchone()
         assert row is not None
         return int(row[0])
+
+    def get_universe_for_scanner(
+        self,
+        session_date: date,
+        as_of_version: int = 1,
+    ) -> dict[int, dict[str, object]]:
+        """Return {stock_id → indicator dict} joining indicators + last close_adj/volume/delivery.
+
+        Scanners need both indicator fields (from technical_indicators) and price/volume
+        fields (close_adj, volume, delivery_pct from daily_ohlc). Returns only stocks
+        that have indicator rows for the requested date.
+        """
+        rows = self._conn.execute(
+            "SELECT ti.stock_id, sm.primary_symbol, "
+            "ti.rsi_14, ti.sma_20, ti.sma_50, ti.sma_200, ti.ema_21, ti.atr_14, "
+            "ti.macd_line, ti.macd_signal, ti.bb_upper, ti.bb_mid, ti.bb_lower, "
+            "ti.adx_14, ti.stoch_rsi_k, ti.stoch_rsi_d, "
+            'ti."pivot", ti.pivot_r1, ti.pivot_r2, ti.pivot_s1, ti.pivot_s2, '
+            "ti.vwap, ti.ret_5d, ti.ret_21d, ti.ret_63d, ti.ret_126d, "
+            "ti.volume_ratio_20, ti.rel_strength_63d, "
+            "ohlc.close_adj, ohlc.volume, ohlc.delivery_pct "
+            "FROM technical_indicators ti "
+            "JOIN stock_master sm ON sm.stock_id = ti.stock_id "
+            "JOIN daily_ohlc ohlc ON ohlc.stock_id = ti.stock_id "
+            "  AND ohlc.session_date = ti.session_date "
+            "  AND ohlc.as_of_version = ti.as_of_version "
+            "WHERE ti.session_date = ? AND ti.as_of_version = ? "
+            "QUALIFY row_number() OVER "
+            "  (PARTITION BY ti.stock_id ORDER BY ti.indicator_version DESC) = 1",
+            [session_date, as_of_version],
+        ).fetchall()
+
+        cols = [
+            "stock_id", "symbol",
+            "rsi_14", "sma_20", "sma_50", "sma_200", "ema_21", "atr_14",
+            "macd_line", "macd_signal", "bb_upper", "bb_mid", "bb_lower",
+            "adx_14", "stoch_rsi_k", "stoch_rsi_d",
+            "pivot", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2",
+            "vwap", "ret_5d", "ret_21d", "ret_63d", "ret_126d",
+            "volume_ratio_20", "rel_strength_63d",
+            "close_adj", "volume", "delivery_pct",
+        ]
+        return {int(r[0]): dict(zip(cols, r, strict=True)) for r in rows}
+
+    def get_latest_session_date(self) -> date | None:
+        """Return the most recent session_date in daily_ohlc, or None if empty."""
+        row = self._conn.execute(
+            "SELECT max(session_date) FROM daily_ohlc"
+        ).fetchone()
+        return row[0] if row and row[0] is not None else None
+
+    def get_scanner_results_for_date(
+        self,
+        scanner: str,
+        session_date: date,
+        as_of_version: int = 1,
+        *,
+        min_score: float | None = None,
+        limit: int = 100,
+        offset: int = 0,
+        sort: str = "composite_score",
+    ) -> list[dict[str, object]]:
+        """Return scanner result rows for a date, with filtering and pagination."""
+        where = "WHERE sr.scanner = ? AND sr.session_date = ? AND sr.as_of_version = ?"
+        params: list[object] = [scanner, session_date, as_of_version]
+        if min_score is not None:
+            where += " AND sr.composite_score >= ?"
+            params.append(min_score)
+        sort_col = "sr.composite_score" if sort == "composite_score" else "sm.primary_symbol"
+        rows = self._conn.execute(
+            f"SELECT sr.stock_id, sm.primary_symbol, sr.composite_score, "
+            "sr.sub_scores, sr.facts, sr.signal_tags, sr.risk_flags, "
+            "sr.data_confidence, sr.weights_version, sr.validation_status "
+            "FROM scanner_results sr "
+            "JOIN stock_master sm ON sm.stock_id = sr.stock_id "
+            f"{where} "
+            f"ORDER BY {sort_col} DESC NULLS LAST "
+            "LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        ).fetchall()
+        cols = [
+            "stock_id", "symbol", "composite_score",
+            "sub_scores_json", "facts_json", "signal_tags_json", "risk_flags_json",
+            "data_confidence", "weights_version", "validation_status",
+        ]
+        return [dict(zip(cols, r, strict=True)) for r in rows]
+
+    def count_scanner_results_for_date(
+        self,
+        scanner: str,
+        session_date: date,
+        as_of_version: int = 1,
+        min_score: float | None = None,
+    ) -> int:
+        where = "WHERE scanner = ? AND session_date = ? AND as_of_version = ?"
+        params: list[object] = [scanner, session_date, as_of_version]
+        if min_score is not None:
+            where += " AND composite_score >= ?"
+            params.append(min_score)
+        row = self._conn.execute(
+            f"SELECT count(*) FROM scanner_results {where}", params
+        ).fetchone()
+        assert row is not None
+        return int(row[0])
+
+    def get_scanner_memberships(
+        self,
+        symbol: str,
+        session_date: date,
+        as_of_version: int = 1,
+    ) -> list[str]:
+        """Return list of scanner names the symbol appears in for a given date."""
+        rows = self._conn.execute(
+            "SELECT sr.scanner FROM scanner_results sr "
+            "JOIN stock_master sm ON sm.stock_id = sr.stock_id "
+            "WHERE sm.primary_symbol = ? AND sr.session_date = ? AND sr.as_of_version = ?",
+            [symbol, session_date, as_of_version],
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def get_latest_ohlc_for_symbol(self, symbol: str) -> OhlcBar | None:
+        """Return the most recent adjusted OHLC bar for a symbol."""
+        # Prefix each column with the table alias to avoid ambiguity in the JOIN.
+        _prefixed = ", ".join(f"ohlc.{c.strip()}" for c in _OHLC_COLS.split(","))
+        row = self._conn.execute(
+            f"SELECT {_prefixed} FROM daily_ohlc ohlc "
+            "JOIN stock_master sm ON sm.stock_id = ohlc.stock_id "
+            "WHERE sm.primary_symbol = ? "
+            "ORDER BY ohlc.session_date DESC, ohlc.as_of_version DESC LIMIT 1",
+            [symbol],
+        ).fetchone()
+        if not row:
+            return None
+        cols = [c.strip() for c in _OHLC_COLS.split(",")]
+        return OhlcBar(**dict(zip(cols, row, strict=True)))
+
+    def get_latest_indicators_for_symbol(
+        self,
+        symbol: str,
+        session_date: date | None = None,
+        as_of_version: int = 1,
+    ) -> dict[str, object] | None:
+        """Return the most recent indicator row for a symbol."""
+        if session_date is None:
+            date_clause = (
+                "AND ti.session_date = (SELECT max(session_date) FROM technical_indicators "
+                "WHERE stock_id = ti.stock_id AND as_of_version = ?)"
+            )
+            extra: list[object] = [as_of_version]
+        else:
+            date_clause = "AND ti.session_date = ?"
+            extra = [session_date]
+        rows = self._conn.execute(
+            "SELECT ti.stock_id, sm.primary_symbol, "
+            "ti.rsi_14, ti.sma_20, ti.sma_50, ti.sma_200, ti.ema_21, ti.atr_14, "
+            "ti.macd_line, ti.macd_signal, ti.bb_upper, ti.bb_mid, ti.bb_lower, "
+            "ti.adx_14, ti.stoch_rsi_k, ti.stoch_rsi_d, "
+            'ti."pivot", ti.pivot_r1, ti.pivot_r2, ti.pivot_s1, ti.pivot_s2, '
+            "ti.vwap, ti.ret_5d, ti.ret_21d, ti.ret_63d, ti.ret_126d, "
+            "ti.volume_ratio_20, ti.rel_strength_63d "
+            "FROM technical_indicators ti "
+            "JOIN stock_master sm ON sm.stock_id = ti.stock_id "
+            f"WHERE sm.primary_symbol = ? AND ti.as_of_version = ? {date_clause} "
+            "ORDER BY ti.indicator_version DESC LIMIT 1",
+            [symbol, as_of_version, *extra],
+        ).fetchall()
+        if not rows:
+            return None
+        cols = [
+            "stock_id", "symbol",
+            "rsi_14", "sma_20", "sma_50", "sma_200", "ema_21", "atr_14",
+            "macd_line", "macd_signal", "bb_upper", "bb_mid", "bb_lower",
+            "adx_14", "stoch_rsi_k", "stoch_rsi_d",
+            "pivot", "pivot_r1", "pivot_r2", "pivot_s1", "pivot_s2",
+            "vwap", "ret_5d", "ret_21d", "ret_63d", "ret_126d",
+            "volume_ratio_20", "rel_strength_63d",
+        ]
+        return dict(zip(cols, rows[0], strict=True))
+
+    def get_indicators_series_for_symbol(
+        self,
+        symbol: str,
+        limit: int = 252,
+        as_of_version: int = 1,
+    ) -> list[dict[str, object]]:
+        """Return time-series indicator rows for a symbol (latest version per date)."""
+        rows = self._conn.execute(
+            "SELECT ti.stock_id, sm.primary_symbol, ti.session_date, "
+            "ti.rsi_14, ti.sma_20, ti.sma_50, ti.sma_200, ti.ema_21, ti.atr_14, "
+            "ti.macd_line, ti.macd_signal, ti.bb_upper, ti.bb_mid, ti.bb_lower, "
+            "ti.adx_14, ti.stoch_rsi_k, ti.stoch_rsi_d, "
+            "ti.ret_5d, ti.ret_21d, ti.ret_63d, ti.ret_126d, "
+            "ti.volume_ratio_20, ti.rel_strength_63d "
+            "FROM technical_indicators ti "
+            "JOIN stock_master sm ON sm.stock_id = ti.stock_id "
+            "WHERE sm.primary_symbol = ? AND ti.as_of_version = ? "
+            "QUALIFY row_number() OVER "
+            "  (PARTITION BY ti.session_date ORDER BY ti.indicator_version DESC) = 1 "
+            "ORDER BY ti.session_date DESC LIMIT ?",
+            [symbol, as_of_version, limit],
+        ).fetchall()
+        cols = [
+            "stock_id", "symbol", "session_date",
+            "rsi_14", "sma_20", "sma_50", "sma_200", "ema_21", "atr_14",
+            "macd_line", "macd_signal", "bb_upper", "bb_mid", "bb_lower",
+            "adx_14", "stoch_rsi_k", "stoch_rsi_d",
+            "ret_5d", "ret_21d", "ret_63d", "ret_126d",
+            "volume_ratio_20", "rel_strength_63d",
+        ]
+        return [dict(zip(cols, r, strict=True)) for r in rows]

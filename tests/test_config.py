@@ -9,7 +9,7 @@ from app.config import Settings
 
 def test_defaults() -> None:
     settings = Settings(_env_file=None)
-    assert settings.model_version == "claude-haiku-4-5-20251001"
+    assert settings.model_version == "qwen2.5:7b-instruct"  # D-027: Ollama local-first default
     assert settings.active_data_source == "yfinance"
     assert settings.history_period == "max"
 

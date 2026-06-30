@@ -1,7 +1,10 @@
-"""One-command local pipeline (SPEC §12). M0 runs the ingest stage.
+"""One-command local pipeline (SPEC §12, docs/steps/05).
 
-    python scripts/run_pipeline.py                # full universe, full history
-    python scripts/run_pipeline.py --limit 5 --period 1y   # quick smoke run
+Runs ingest → scan → explain over the local universe and prints a stage summary.
+
+    python scripts/run_pipeline.py                       # full pipeline
+    python scripts/run_pipeline.py --stages ingest scan  # skip explain
+    python scripts/run_pipeline.py --limit 5 --period 1y # quick smoke run
 """
 
 from __future__ import annotations
@@ -10,31 +13,38 @@ import argparse
 import sys
 from pathlib import Path
 
-# Allow running as a plain script (`python scripts/run_pipeline.py`).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.pipeline.ingest import run_ingest  # noqa: E402
+from app.pipeline.orchestrator import run  # noqa: E402
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Saakshya local pipeline (M0: ingest).")
-    parser.add_argument("--limit", type=int, default=None, help="cap number of universe symbols")
-    parser.add_argument(
-        "--period", type=str, default=None, help="yfinance history period (e.g. max, 5y, 1y)"
-    )
+    parser = argparse.ArgumentParser(description="Saakshya local pipeline (M5).")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="cap number of universe symbols")
+    parser.add_argument("--period", type=str, default=None,
+                        help="yfinance history period (e.g. max, 5y, 1y)")
+    parser.add_argument("--stages", nargs="+",
+                        choices=["ingest", "scan", "explain"],
+                        default=None,
+                        help="stages to run (default: all)")
     args = parser.parse_args()
 
-    summary = run_ingest(limit=args.limit, period=args.period)
-    print(
-        f"[ingest] source={summary.source} symbols={summary.symbols} "
-        f"with_data={summary.symbols_with_data} bars_in_db={summary.bars}"
-    )
-    if summary.empty_symbols:
-        print(f"[ingest] no data (quarantined): {summary.empty_symbols}")
-    if summary.unmapped:
-        print(f"[ingest] unmapped tickers: {summary.unmapped}")
-    print("[compute] indicators: pending milestone M2 (02-indicators-and-scanners)")
-    print("[scan]    scanners:   pending milestone M3")
+    result = run(limit=args.limit, period=args.period, stages=args.stages)
+
+    print(f"\n[pipeline] run_id={result.run_id}  "
+          f"session_date={result.session_date}  "
+          f"total={result.total_duration_s:.1f}s")
+
+    for s in result.stages:
+        print(f"  [{s.stage:<8}] rows_in={s.rows_in:<5} rows_out={s.rows_out:<5} "
+              f"{s.duration_s:.1f}s  {s.notes}")
+
+    if result.ai_calls or result.ai_cache_hits or result.ai_suppressed:
+        print(f"\n  [explain]  ai_calls={result.ai_calls}  "
+              f"cache_hits={result.ai_cache_hits}  "
+              f"suppressed={result.ai_suppressed}")
+
     return 0
 
 

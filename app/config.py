@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     active_data_source: str = Field(default="yfinance")
     history_period: str = Field(default="max")
 
+    # API rate limits (requests per minute, per IP/client).
+    api_read_rate_limit: int = Field(default=60)   # general read endpoints
+    api_ai_rate_limit: int = Field(default=30)     # AI-summary endpoints (stricter)
+
     def require_anthropic_key(self) -> str:
         """Return the key or fail loud (docs/27 §0.5) — without leaking the value."""
         if not self.anthropic_api_key:

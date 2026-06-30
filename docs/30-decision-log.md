@@ -264,6 +264,24 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** `app/ai/provider.py`, `app/config.py`; zero impact on `explainer.py`, `verify.py`, `guardrail.py` (fully provider-agnostic). Cost is 0.0 USD per call locally. Provider can be swapped at deploy time.
 - **Status:** Accepted (supersedes the "Claude Haiku default" aspect of D-011; Ollama remains the local-first default until cloud staging begins)
 
+### D-028 — M5 rate-limiter: in-process token bucket (no Redis) for local-first
+- **Date:** 2026-06-30
+- **Context:** SPEC §12 local-first mandate excludes Redis and all cloud infrastructure until Mode A core is validated.  The API needs rate limiting to enforce the AI bucket (30 req/min) and read-endpoint bucket (60 req/min) per docs/10 §0.4.
+- **Alternatives considered:** Redis-backed rate limiter (violates local-first, adds ops overhead); middleware-library (Slow API / limits-aware deps — adds a dependency for a simple feature); in-process token bucket (no deps, deterministic in tests, swappable for production).
+- **Final decision:** `app/api/ratelimit.py` implements a thread-safe in-process token bucket keyed by `(client_ip, bucket_name)`. Config-driven via `Settings.api_read_rate_limit` / `api_ai_rate_limit`. Exposed as FastAPI dependency functions (`read_rate_limit_dep`, `ai_rate_limit_dep`). Replace with Redis-backed implementation when moving to multi-worker production.
+- **Owner:** Engineering
+- **Impact:** `app/api/ratelimit.py`, `app/config.py`; no impact on scanner/AI business logic.
+- **Status:** Accepted (local-first only; Redis swap-in is tracked in step 06 → cloud phase)
+
+### D-029 — `do` is a reserved keyword in DuckDB — all daily_ohlc JOINs use alias `ohlc`
+- **Date:** 2026-06-30
+- **Context:** DuckDB treats `DO` as a reserved keyword (like `BEGIN`/`END`). Using `daily_ohlc do` as a table alias raises `Parser Error: syntax error at or near "do"`. Discovered during M5 API testing when `get_latest_ohlc_for_symbol` joined `daily_ohlc` with `stock_master`.
+- **Alternatives considered:** Use `d` as alias (too short, confusing); use `daily` (confusable with a column); use `ohlc` (clearly names the table's content, zero collision risk).
+- **Final decision:** All JOIN queries over `daily_ohlc` use the `ohlc` alias. Additionally, when `_OHLC_COLS` (unqualified column list) is used in a JOIN, each column is prefixed as `ohlc.{col}` to avoid ambiguity (both `daily_ohlc` and `stock_master` have `stock_id`).
+- **Owner:** Engineering
+- **Impact:** `app/storage/repository.py` — `get_latest_ohlc_for_symbol`, `get_universe_for_scanner`; all new JOIN queries must follow this convention.
+- **Status:** Accepted
+
 ---
 
 ## 2. Decision index
@@ -297,6 +315,8 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-025 | 2026-06-30 | M3b: GateConfig v1 thresholds (ρ≥0.6, IC t-stat≥1.5); scipy 1.14.1 added | Quant/Eng | Composite UI gate | Accepted (verdict pending — yfinance network-blocked on dev machine) |
 | D-026 | 2026-06-30 | DuckDB reserved keyword: `pivot` must be double-quoted in all SQL | Engineering | Storage/pipeline | Accepted |
 | D-027 | 2026-06-30 | Default AI provider: Ollama (`qwen2.5:7b-instruct`) replaces Claude Haiku for local-first MVP | AI/ML | Provider abstraction / cost | Accepted |
+| D-028 | 2026-06-30 | M5 rate-limiter: in-process token bucket (no Redis) for local-first | Engineering | API / ops | Accepted |
+| D-029 | 2026-06-30 | `do` reserved in DuckDB — use `ohlc` alias in all daily_ohlc JOINs | Engineering | Storage / all JOIN queries | Accepted |
 
 ---
 

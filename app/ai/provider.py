@@ -131,8 +131,9 @@ class AnthropicProvider:
             system=system,
             messages=[{"role": "user", "content": payload_json}],
         )
+        from anthropic.types import TextBlock  # noqa: PLC0415
         first = msg.content[0] if msg.content else None
-        text  = first.text if hasattr(first, "text") else ""
+        text  = first.text if isinstance(first, TextBlock) else ""
         return LLMResult(
             text=text,
             model_id=model_id,
