@@ -43,23 +43,28 @@ def get_market_summary(
             f"No scanner data for {as_of}. Run the pipeline first."
         )
 
-    scanner_counts: dict[str, dict[str, object]] = {
-        str(r[0]): {"count": int(r[1]), "avg_score": _f(r[2])} for r in rows
+    _LABELS = {
+        "momentum":        "Momentum",
+        "volume_breakout": "Volume Breakout",
+        "rsi":             "RSI Conditions",
+        "moving_average":  "Moving Average",
     }
-    counts = [int(r[1]) for r in rows]
-    total_members: int = sum(counts)
+    scanner_counts: dict[str, dict[str, object]] = {
+        str(r[0]): {"count": int(r[1]), "label": _LABELS.get(str(r[0]), str(r[0]))}
+        for r in rows
+    }
+    total_members: int = sum(int(r[1]) for r in rows)
 
-    # Advance/decline from momentum scanner.
     advance_count = _momentum_count(conn, as_of, min_score=60.0)
     decline_count = _momentum_count(conn, as_of, max_score=40.0)
 
     data = {
-        "session_date":    str(as_of),
-        "total_scanner_members": total_members,
-        "advance_count":   advance_count,
-        "decline_count":   decline_count,
-        "scanners":        scanner_counts,
-        "disclaimer":      "Not investment advice. Evidence-based analytics only.",
+        "session_date":   str(as_of),
+        "total_members":  total_members,
+        "advance_count":  advance_count,
+        "decline_count":  decline_count,
+        "scanner_counts": scanner_counts,
+        "disclaimer":     "Not investment advice. Evidence-based analytics only.",
     }
     return ok(
         data,

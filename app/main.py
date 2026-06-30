@@ -15,7 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import SaakshyaError, generic_error_handler, saakshya_error_handler
-from app.api.routers import market, scanners, stocks
+from app.api.routers import market, scanners, sectors, stocks
 
 app = FastAPI(
     title="Saakshya API",
@@ -53,6 +53,7 @@ app.add_exception_handler(Exception, generic_error_handler)
 # Routers.
 app.include_router(market.router)
 app.include_router(scanners.router)
+app.include_router(sectors.router)
 app.include_router(stocks.router)
 
 

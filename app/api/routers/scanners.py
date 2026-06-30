@@ -48,10 +48,31 @@ _SCANNER_META: dict[str, dict[str, str]] = {
 @router.get("")
 def list_scanners(
     request: Request,
+    conn:    DbDep,
+    as_of:   AsOfDep,
     _user:   UserDep,
     _rl:     None = Depends(read_rate_limit_dep),
 ) -> dict[str, Any]:
-    return ok(list(_SCANNER_META.values()))
+    # Build result counts from DB for the latest session (0 when no pipeline run yet).
+    counts: dict[str, int] = {}
+    if as_of is not None:
+        rows = conn.execute(
+            "SELECT scanner, count(*) FROM scanner_results "
+            "WHERE session_date = ? AND as_of_version = 1 GROUP BY scanner",
+            [as_of],
+        ).fetchall()
+        counts = {str(r[0]): int(r[1]) for r in rows}
+
+    items = [
+        {
+            "scanner":      key,
+            "label":        meta["label"],
+            "description":  meta["description"],
+            "result_count": counts.get(key, 0),
+        }
+        for key, meta in _SCANNER_META.items()
+    ]
+    return ok(items)
 
 
 @router.get("/{scanner}")
@@ -84,7 +105,52 @@ def get_scanner_results(
         sort=sort,
     )
 
-    results = [_format_row(r) for r in rows]
+    # Enrich with stock name, sector, and last close/change from daily_ohlc.
+    symbols = [r["symbol"] for r in rows] if rows else []
+    enrichment: dict[str, dict[str, Any]] = {}
+    if symbols:
+        placeholders = ", ".join("?" * len(symbols))
+        rich_rows = conn.execute(
+            f"""
+            SELECT
+                es.symbol,
+                sm.name,
+                sec.name  AS sector,
+                o.close_adj,
+                o2.close_adj AS prev_close
+            FROM exchange_symbols es
+            JOIN stock_master sm  ON sm.stock_id = es.stock_id
+            LEFT JOIN sector_master sec ON sec.sector_id = sm.sector_id
+            LEFT JOIN daily_ohlc o  ON o.stock_id  = es.stock_id
+                                   AND o.session_date = ?
+                                   AND o.as_of_version = 1
+            LEFT JOIN daily_ohlc o2 ON o2.stock_id = es.stock_id
+                                   AND o2.session_date = (
+                                       SELECT MAX(session_date)
+                                       FROM daily_ohlc
+                                       WHERE stock_id = es.stock_id
+                                         AND session_date < ?
+                                         AND as_of_version = 1
+                                   )
+                                   AND o2.as_of_version = 1
+            WHERE es.symbol IN ({placeholders})
+              AND es.valid_to IS NULL
+            """,
+            [as_of, as_of, *symbols],
+        ).fetchall()
+        for row in rich_rows:
+            sym, name, sector, close, prev_close = row
+            change_pct = None
+            if close is not None and prev_close is not None and prev_close != 0:
+                change_pct = round((close - prev_close) / prev_close * 100, 2)
+            enrichment[str(sym)] = {
+                "name": name or "",
+                "sector": sector,
+                "close": close,
+                "change_pct": change_pct,
+            }
+
+    results = [_format_row(r, enrichment.get(r["symbol"], {}), str(as_of)) for r in rows]
 
     return ok(
         results,
@@ -94,15 +160,22 @@ def get_scanner_results(
     )
 
 
-def _format_row(r: dict[str, Any]) -> dict[str, Any]:
+def _format_row(r: dict[str, Any], enrich: dict[str, Any], as_of: str) -> dict[str, Any]:
+    signal_tags = _j(r.get("signal_tags_json")) or []
     return {
         "symbol":          r["symbol"],
+        "name":            enrich.get("name", ""),
+        "sector":          enrich.get("sector"),
         "composite_score": _f(r.get("composite_score")),
         "sub_scores":      _j(r.get("sub_scores_json")),
         "facts":           _j(r.get("facts_json")),
-        "signal_tags":     _j(r.get("signal_tags_json")) or [],
+        "reasons":         signal_tags,
+        "signal_tags":     signal_tags,
         "risk_flags":      _j(r.get("risk_flags_json")) or [],
         "data_confidence": r.get("data_confidence"),
+        "last_close":      enrich.get("close"),
+        "change_pct":      enrich.get("change_pct"),
+        "as_of":           as_of,
     }
 
 
