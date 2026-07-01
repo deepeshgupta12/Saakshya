@@ -110,6 +110,78 @@ _M4_MIGRATIONS: list[str] = [
 ]
 
 
+# M7 migration: user accounts, auth tokens, watchlists, market brief cache (idempotent).
+_M7_MIGRATIONS: list[str] = [
+    """
+    CREATE TABLE IF NOT EXISTS users (
+        user_id      VARCHAR NOT NULL PRIMARY KEY,
+        email        VARCHAR NOT NULL UNIQUE,
+        password_hash VARCHAR,
+        display_name VARCHAR,
+        plan         VARCHAR NOT NULL DEFAULT 'free',
+        created_at   TIMESTAMP DEFAULT now(),
+        updated_at   TIMESTAMP DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+        token_id     VARCHAR NOT NULL PRIMARY KEY,
+        family_id    VARCHAR NOT NULL,
+        user_id      VARCHAR NOT NULL,
+        token_hash   VARCHAR NOT NULL,
+        revoked      BOOLEAN NOT NULL DEFAULT FALSE,
+        issued_at    TIMESTAMP DEFAULT now(),
+        expires_at   TIMESTAMP NOT NULL
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS consents (
+        consent_id   VARCHAR NOT NULL PRIMARY KEY,
+        user_id      VARCHAR NOT NULL,
+        consent_type VARCHAR NOT NULL,
+        version      VARCHAR NOT NULL DEFAULT '1.0',
+        granted_at   TIMESTAMP DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id          VARCHAR NOT NULL PRIMARY KEY,
+        risk_preference  VARCHAR,
+        followed_sectors VARCHAR,
+        layout           VARCHAR,
+        updated_at       TIMESTAMP DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS watchlists (
+        watchlist_id VARCHAR NOT NULL PRIMARY KEY,
+        user_id      VARCHAR NOT NULL,
+        name         VARCHAR NOT NULL,
+        created_at   TIMESTAMP DEFAULT now(),
+        updated_at   TIMESTAMP DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS watchlist_items (
+        item_id      VARCHAR NOT NULL PRIMARY KEY,
+        watchlist_id VARCHAR NOT NULL,
+        user_id      VARCHAR NOT NULL,
+        symbol       VARCHAR NOT NULL,
+        added_at     TIMESTAMP DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS market_brief_cache (
+        brief_date   DATE NOT NULL PRIMARY KEY,
+        brief_text   VARCHAR NOT NULL,
+        audit_id     VARCHAR,
+        model_version VARCHAR,
+        created_at   TIMESTAMP DEFAULT now()
+    )
+    """,
+]
+
+
 def connect(path: Path | None = None) -> duckdb.DuckDBPyConnection:
     """Open (creating the parent dir if needed) a DuckDB connection to ``path``.
 
@@ -141,6 +213,8 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     for migration in _M3B_MIGRATIONS:
         conn.execute(migration)
     for migration in _M4_MIGRATIONS:
+        conn.execute(migration)
+    for migration in _M7_MIGRATIONS:
         conn.execute(migration)
 
 

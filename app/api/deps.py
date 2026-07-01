@@ -1,7 +1,9 @@
 """FastAPI shared dependencies (docs/09 §6, docs/10 §0 local-first note).
 
-Local-first stubs:
-  - Auth/plan: no-op (single-user dev); wired so production can swap in JWT validation.
+Auth tiers (M7):
+  - UserDep        — public stub for V1 read-only routes (no token required).
+  - AuthUserDep    — real JWT validation; 401 if missing/expired (V2 gated routes).
+  - OptionalAuthDep — JWT if present, None if absent (hydrates user context when logged in).
   - as_of resolver: returns latest session date from DB when not specified.
   - DuckDB session: context-managed connection per request.
 """
@@ -13,8 +15,10 @@ from datetime import date
 from typing import Annotated
 
 import duckdb
-from fastapi import Depends, Query
+from fastapi import Depends, Header, HTTPException, Query, status
+from jose import JWTError
 
+from app.auth.tokens import decode_access_token
 from app.storage.duckdb import get_connection
 
 # ---------------------------------------------------------------------------
@@ -56,18 +60,70 @@ AsOfDep = Annotated[date | None, Depends(resolve_as_of)]
 
 
 # ---------------------------------------------------------------------------
-# Stubbed auth / plan (local-first; production: replace with JWT validation)
+# Auth — stub (V1 public routes) + real JWT (V2 gated routes)
 # ---------------------------------------------------------------------------
 
-class _StubUser:
-    user_id: str = "local"
-    plan:    str = "pro"      # all features open in local-first mode
-    scopes:  list[str] = []
+class AuthUser:
+    """Authenticated user extracted from a validated JWT."""
+    def __init__(self, user_id: str, plan: str) -> None:
+        self.user_id = user_id
+        self.plan    = plan
+        self.scopes: list[str] = []
+
+    @property
+    def is_premium(self) -> bool:
+        return self.plan in ("premium", "pro", "enterprise")
+
+
+class _StubUser(AuthUser):
+    """Local-first stub — all V1 public read routes work without any token."""
+    def __init__(self) -> None:
+        super().__init__(user_id="local", plan="pro")
 
 
 def get_current_user() -> _StubUser:
-    """Stubbed auth — always returns a local super-user. Swap for JWT in production."""
+    """Public stub for V1 read-only routes — no token required."""
     return _StubUser()
 
 
-UserDep = Annotated[_StubUser, Depends(get_current_user)]
+def _bearer_token(authorization: str | None = Header(default=None)) -> str | None:
+    """Extract raw Bearer token from Authorization header, or None."""
+    if authorization and authorization.lower().startswith("bearer "):
+        return authorization[7:]
+    return None
+
+
+def _require_auth(token: str | None = Depends(_bearer_token)) -> AuthUser:
+    """JWT validation dep — raises 401 if token is missing, expired, or invalid."""
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    try:
+        payload = decode_access_token(token)
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token is invalid or expired.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return AuthUser(user_id=payload["sub"], plan=payload.get("plan", "free"))
+
+
+def _optional_auth(token: str | None = Depends(_bearer_token)) -> AuthUser | None:
+    """Optional JWT — returns AuthUser if valid token present, None otherwise."""
+    if token is None:
+        return None
+    try:
+        payload = decode_access_token(token)
+        return AuthUser(user_id=payload["sub"], plan=payload.get("plan", "free"))
+    except JWTError:
+        return None
+
+
+# Type aliases for route signatures
+UserDep        = Annotated[_StubUser, Depends(get_current_user)]   # V1 public (unchanged)
+AuthUserDep    = Annotated[AuthUser,  Depends(_require_auth)]       # V2 JWT-required
+OptionalAuthDep = Annotated[AuthUser | None, Depends(_optional_auth)]  # V2 optional

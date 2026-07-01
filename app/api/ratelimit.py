@@ -54,6 +54,10 @@ class RateLimiter:
                 float(settings.api_ai_rate_limit),
                 float(settings.api_ai_rate_limit) / 60.0,
             ),
+            "auth": (
+                float(settings.api_auth_rate_limit),
+                float(settings.api_auth_rate_limit) / 60.0,
+            ),
         }
         self._buckets: dict[tuple[str, str], _Bucket] = defaultdict(
             lambda: _Bucket(capacity=0, tokens=0, refill_rate=0)
@@ -104,3 +108,8 @@ def read_rate_limit_dep(request: Request) -> None:
 def ai_rate_limit_dep(request: Request) -> None:
     """FastAPI dependency for AI-endpoint rate limiting (stricter bucket)."""
     rate_limit(request, "ai")
+
+
+def auth_rate_limit_dep(request: Request) -> None:
+    """FastAPI dependency for auth-endpoint rate limiting (10 req/min per IP)."""
+    rate_limit(request, "auth")

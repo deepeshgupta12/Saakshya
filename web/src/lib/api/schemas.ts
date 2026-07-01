@@ -123,8 +123,19 @@ const sectorSummarySchema = z.object({
   })).optional(),
 });
 
+/* ── AI market brief ── */
+const marketBriefSchema = z.object({
+  brief:         z.string(),
+  session_date:  z.string().nullable().optional(),
+  model_version: z.string().nullable().optional(),
+  cached:        z.boolean().optional(),
+  suppressed:    z.boolean().optional(),
+  degraded:      z.boolean().optional(),
+});
+
 export const schemas = {
   errorEnvelope,
+  marketBriefEnvelope:      envelope(marketBriefSchema),
   marketSummaryEnvelope:    envelope(marketSummarySchema),
   scannerListEnvelope:      envelope(z.array(scannerMetaSchema)),
   scannerResultsEnvelope:   envelope(z.array(scannerResultSchema)),

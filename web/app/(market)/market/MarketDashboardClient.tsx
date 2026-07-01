@@ -1,5 +1,5 @@
 "use client";
-import { useMarketSummary, useSectors } from "@/hooks";
+import { useMarketSummary, useSectors, useMarketBrief } from "@/hooks";
 import {
   IndexStrip, BreadthPanel, SectorHeatmap, AiMarketSummaryCard,
   MarketMoversTable, MarketSkeleton, DataConfidenceIndicator,
@@ -8,12 +8,15 @@ import { ErrorState } from "@/components/ui";
 
 export function MarketDashboardClient() {
   const { data: summary, isLoading, isError, refetch } = useMarketSummary();
-  const { data: sectors, isLoading: sectorsLoading } = useSectors();
+  const { data: sectors } = useSectors();
+  const { data: brief }   = useMarketBrief();
 
   if (isLoading) return <MarketSkeleton />;
   if (isError || !summary) {
     return <ErrorState message="Unable to load market data." onRetry={() => refetch()} />;
   }
+
+  const briefSuppressed = !brief || !!brief.suppressed || !!brief.degraded;
 
   return (
     <div className="space-y-6">
@@ -25,13 +28,17 @@ export function MarketDashboardClient() {
         <div className="lg:col-span-2">
           <BreadthPanel summary={summary} />
         </div>
-        <AiMarketSummaryCard suppressed />
+        <AiMarketSummaryCard
+          suppressed={briefSuppressed}
+          narrative={briefSuppressed ? undefined : brief?.brief}
+          dataConfidence={briefSuppressed ? "low" : "high"}
+        />
       </div>
 
       {/* Sector heatmap */}
       {sectors?.length ? (
         <div>
-          <h2 className="text-sm font-semibold text-[--text-muted] mb-3 uppercase tracking-wide">
+          <h2 className="text-sm font-semibold text-(--text-muted) mb-3 uppercase tracking-wide">
             Sector Strength
           </h2>
           <SectorHeatmap sectors={sectors} />

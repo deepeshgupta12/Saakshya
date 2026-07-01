@@ -367,6 +367,18 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-031 | 2026-06-30 | Zod v4 API changes: `z.record()` requires 2 args (key+value); `z.enum()` requires tuple; all API schemas use `z.string()` + explicit casts | Frontend | API client / Zod schemas | Accepted |
 | D-032 | 2026-06-30 | Lightweight Charts v5: series created via `chart.addSeries(SeriesType, opts)` — `addCandlestickSeries` / `addLineSeries` etc. removed | Frontend | PriceChartImpl | Accepted |
 | D-033 | 2026-06-30 | ui-ux-pro-max design adoption: Modern Dark Cinema, JetBrains Mono, spring physics, stagger, AI violet accent, a11y (skip-link, aria-current, reduced-motion) | Frontend | All web components, motion variants, layout | Accepted |
+| D-034 | 2026-06-30 | Tailwind v4 CSS variable syntax: `[--var]` bracket syntax is invalid in v4 (outputs literal string, not `var()`); all 191 occurrences migrated to `(--var)` paren syntax | Frontend | All web components (bulk sed replacement) | Accepted |
+| D-035 | 2026-06-30 | Scanner enrichment: JOIN via `stock_master.primary_symbol` (not `exchange_symbols.symbol` which carries `.NS` suffix); fixes null name/sector/price in scanner results | Backend | `app/api/routers/scanners.py` enrichment query | Accepted |
+| D-036 | 2026-06-30 | Sector constituents: use `sm.primary_symbol` (not `es.symbol`) so constituent links route to `/stocks/RELIANCE` not `/stocks/RELIANCE.NS` | Backend | `app/api/routers/sectors.py` | Accepted |
+| D-037 | 2026-06-30 | Market breadth (advance/decline): compute from actual OHLC close-vs-prev-close, not from momentum scanner count (which is 0 when momentum has no results) | Backend | `app/api/routers/market.py` | Accepted |
+| D-038 | 2026-06-30 | Scanner slug normalisation: URL slugs use hyphens (`moving-average`) but backend keys use underscores (`moving_average`); normalise with `.replace(/-/g, "_")` in the API client | Frontend | `web/src/lib/api/client.ts` | Accepted |
+| D-039 | 2026-06-30 | AI payload critical-key names corrected: `ret_3m_pct`→`ret_21d`, `sma50`→`sma_50` to match `technical_indicators` column names; fixes universal AI summary suppression | Backend | `app/ai/payload.py` | Accepted |
+| D-040 | 2026-06-30 | Named static scanner pages (`/scanners/momentum/page.tsx` etc.) deleted; they redirected to themselves (infinite loop), shadowing the working `[slug]/page.tsx` dynamic route | Frontend | `web/app/(market)/scanners/` | Accepted |
+| D-041 | 2026-07-01 | M7 auth: HS256 JWT (not RS256) for local-first MVP; 15-min access tokens in-memory only, 30-day rotating refresh tokens in localStorage; RS256 upgrade gated on cloud deploy | Auth | `app/auth/tokens.py` | Accepted |
+| D-042 | 2026-07-01 | Argon2id with `time_cost=3, memory_cost=65536` (64MB) chosen for local-first M1 Mac; meets OWASP recommendation without causing memory pressure | Auth | `app/auth/passwords.py` | Accepted |
+| D-043 | 2026-07-01 | Refresh-token replay detection: replayed token (already `revoked=TRUE`) triggers full-family revoke, not just that one token — defends against stolen token + partial race | Auth | `app/api/routers/auth.py` | Accepted |
+| D-044 | 2026-07-01 | Market brief: single `GET /api/ai/market-brief` endpoint; cached per `brief_date` in `market_brief_cache`; Ollama `cheap` tier on `qwen2.5:7b-instruct`; no external call if suppressed/degraded | AI | `app/ai/market_brief.py` + `app/api/routers/ai.py` | Accepted |
+| D-045 | 2026-07-01 | Signup requires both `consent_not_advice=true` + `consent_ai_use=true` as explicit body fields; server-side gate (not just client-side checkbox) — blocked with 422 if missing | Compliance | `app/api/routers/auth.py` | Accepted |
 
 ---
 

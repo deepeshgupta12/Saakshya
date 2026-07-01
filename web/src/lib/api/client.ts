@@ -69,7 +69,9 @@ export async function fetchScannerResults(
   if (params?.offset)   sp.set("offset",    String(params.offset));
   if (params?.sector)   sp.set("sector",    params.sector);
   const qs = sp.toString() ? `?${sp}` : "";
-  const env = await apiFetch(`/v1/scanners/${slug}${qs}`, schemas.scannerResultsEnvelope);
+  // URL slugs use hyphens (moving-average) but backend keys use underscores (moving_average)
+  const apiSlug = slug.replace(/-/g, "_");
+  const env = await apiFetch(`/v1/scanners/${apiSlug}${qs}`, schemas.scannerResultsEnvelope);
   const results: ScannerResult[] = env.data.map((r) => ({
     rank:             r.rank ?? 0,
     symbol:           r.symbol,
@@ -129,6 +131,16 @@ export async function fetchStockAiSummary(symbol: string, asOf?: string): Promis
     model_version: env.data.model_version ?? "",
     disclaimer:    env.data.disclaimer ?? "",
   };
+}
+
+/* ── AI ── */
+export async function fetchMarketBrief(asOf?: string): Promise<{
+  brief: string; session_date?: string | null; model_version?: string | null;
+  cached?: boolean; suppressed?: boolean; degraded?: boolean;
+}> {
+  const qs = asOf ? `?date=${asOf}` : "";
+  const env = await apiFetch(`/api/ai/market-brief${qs}`, schemas.marketBriefEnvelope);
+  return env.data;
 }
 
 /* ── Sectors ── */

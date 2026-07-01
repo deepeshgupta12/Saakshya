@@ -7,7 +7,7 @@ import { QK } from "@/constants/query-keys";
 import {
   fetchMarketSummary, fetchScannerList, fetchScannerResults,
   fetchStockOverview, fetchStockTechnicals, fetchStockAiSummary,
-  fetchSectors, fetchSectorDetail,
+  fetchSectors, fetchSectorDetail, fetchMarketBrief,
 } from "@/lib/api/client";
 
 /* Market */
@@ -61,6 +61,16 @@ export function useStockAiSummary(symbol: string, asOf?: string) {
     enabled: !!symbol,
     /* AI summaries have shorter stale time — re-check after 1h */
     staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+/* AI */
+export function useMarketBrief(asOf?: string) {
+  return useQuery({
+    queryKey: QK.ai.marketBrief(asOf),
+    queryFn: () => fetchMarketBrief(asOf),
+    staleTime: 60 * 60 * 1000, // AI brief valid for 1h
     retry: 1,
   });
 }

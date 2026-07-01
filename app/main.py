@@ -16,10 +16,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import SaakshyaError, generic_error_handler, saakshya_error_handler
 from app.api.routers import market, scanners, sectors, stocks
+from app.api.routers import auth, watchlists, ai as ai_router
 
 app = FastAPI(
     title="Saakshya API",
-    version="0.5.0",
+    version="0.7.0",
     description=(
         "Evidence-first Indian equity analytics for NSE/BSE. "
         "Mode A (pure analytics — not investment advice). "
@@ -55,6 +56,9 @@ app.include_router(market.router)
 app.include_router(scanners.router)
 app.include_router(sectors.router)
 app.include_router(stocks.router)
+app.include_router(auth.router)
+app.include_router(watchlists.router)
+app.include_router(ai_router.router)
 
 
 @app.get("/health", tags=["meta"])

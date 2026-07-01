@@ -21,4 +21,7 @@ export const QK = {
     list: () => ["sectors"] as const,
     detail: (slug: string) => ["sector", slug] as const,
   },
+  ai: {
+    marketBrief: (date?: string) => ["ai", "market-brief", date ?? "latest"] as const,
+  },
 } as const;

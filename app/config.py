@@ -53,9 +53,14 @@ class Settings(BaseSettings):
     active_data_source: str = Field(default="yfinance")
     history_period: str = Field(default="max")
 
+    # Auth (M7, docs/23 §1) — HS256 secret for local-first; swap to RS256 in prod.
+    # Generated once at init; set SAAKSHYA_SECRET_KEY in .env for persistence.
+    secret_key: str = Field(default="dev-local-secret-change-in-prod-32chars!!")
+
     # API rate limits (requests per minute, per IP/client).
     api_read_rate_limit: int = Field(default=60)   # general read endpoints
     api_ai_rate_limit: int = Field(default=30)     # AI-summary endpoints (stricter)
+    api_auth_rate_limit: int = Field(default=10)   # auth endpoints (stricter)
 
     def require_anthropic_key(self) -> str:
         """Return the key or fail loud (docs/27 §0.5) — without leaking the value."""

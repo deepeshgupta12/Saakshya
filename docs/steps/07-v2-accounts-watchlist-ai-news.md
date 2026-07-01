@@ -2,7 +2,7 @@
 > Read first: [SPEC.md](../../SPEC.md) · [Roadmap](../02-product-roadmap.md) · [Feature modules](../04-feature-modules.md) · [AI architecture](../14-ai-llm-agent-architecture.md) · [News & sentiment](../18-news-sentiment-and-corporate-actions.md) · [Security & auth](../23-security-auth-and-privacy.md) · [API contracts](../10-api-contracts.md) · [Screens](../08-screen-by-screen-documentation.md)
 
 **Maps to:** Roadmap V2 · SPEC Phase 2
-**Status:** Not started   |   **Regulatory mode:** A
+**Status:** In progress — Auth, Watchlist, AI brief backend + frontend complete (2026-07-01); OAuth, IDOR tests, news sentiment pending   |   **Regulatory mode:** A
 **Prerequisites:** [04-ai-explanation-layer.md](04-ai-explanation-layer.md) · [05-api-and-pipeline.md](05-api-and-pipeline.md) · [06-frontend-foundation-and-v1-screens.md](06-frontend-foundation-and-v1-screens.md)
 
 ## Overview
