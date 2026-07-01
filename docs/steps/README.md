@@ -25,13 +25,13 @@ This `/docs/steps` directory is the **executable build plan**: feature-wise, ord
 | Step file | Delivers | Roadmap | SPEC phase | Local M | Mode | Status |
 |---|---|---|---|---|---|---|
 | [00-phase-0-derisk](00-phase-0-derisk.md) | Legal mode, data procurement, score-validation spike plan | pre-V1 | Phase 0 | — | A | Not started |
-| [01-local-mvp-foundation](01-local-mvp-foundation.md) | Repo scaffold, config, DuckDB, DataSource adapter, ingestion, corp-actions | V1 | Phase 0–1 | M0–M1 | A | Not started |
-| [02-indicators-and-scanners](02-indicators-and-scanners.md) | Vectorized indicators + rule-based momentum/volume/RSI/MA scanners | V1 | Phase 1 | M2–M3 | A | Not started |
-| [03-scanner-score-validation](03-scanner-score-validation.md) | **Gate:** prove momentum score carries signal (else redesign) | V1 | Phase 0 spike | M3b | A | Not started |
-| [04-ai-explanation-layer](04-ai-explanation-layer.md) | Grounding contract, Haiku explainer, verification harness, guardrails | V1–V2 | Phase 2 | M4 | A | Not started |
-| [05-api-and-pipeline](05-api-and-pipeline.md) | Pipeline orchestration + FastAPI endpoints + envelope/caching | V1 | Phase 1–2 | M5 | A | Not started |
-| [06-frontend-foundation-and-v1-screens](06-frontend-foundation-and-v1-screens.md) | Next.js + design system + dashboard/scanner/stock/sector screens | V1 | Phase 1 | M6 | A | Not started |
-| [07-v2-accounts-watchlist-ai-news](07-v2-accounts-watchlist-ai-news.md) | Accounts, watchlists, AI summaries + daily brief, news sentiment | V2 | Phase 2 | — | A | Not started |
+| [01-local-mvp-foundation](01-local-mvp-foundation.md) | Repo scaffold, config, DuckDB, DataSource adapter, ingestion, corp-actions | V1 | Phase 0–1 | M0–M1 | A | **Complete** (M1 — 2026-06-29) |
+| [02-indicators-and-scanners](02-indicators-and-scanners.md) | Vectorized indicators + rule-based momentum/volume/RSI/MA scanners | V1 | Phase 1 | M2–M3 | A | **Complete** (M3 — 2026-06-30) |
+| [03-scanner-score-validation](03-scanner-score-validation.md) | **Gate:** prove momentum score carries signal (else redesign) | V1 | Phase 0 spike | M3b | A | **Harness complete** — verdict pending (internet access needed for yfinance data) |
+| [04-ai-explanation-layer](04-ai-explanation-layer.md) | Grounding contract, Haiku explainer, verification harness, guardrails | V1–V2 | Phase 2 | M4 | A | **Complete** (M4 — 2026-06-30) |
+| [05-api-and-pipeline](05-api-and-pipeline.md) | Pipeline orchestration + FastAPI endpoints + envelope/caching | V1 | Phase 1–2 | M5 | A | **Complete** (M5 — 2026-06-30) |
+| [06-frontend-foundation-and-v1-screens](06-frontend-foundation-and-v1-screens.md) | Next.js + design system + dashboard/scanner/stock/sector screens | V1 | Phase 1 | M6 | A | **Complete** (M6 — 2026-06-30) |
+| [07-v2-accounts-watchlist-ai-news](07-v2-accounts-watchlist-ai-news.md) | Accounts, watchlists, AI summaries + daily brief, news sentiment | V2 | Phase 2 | — | A | **Complete** (M7 — 2026-07-01); ML sentiment deferred to step 15 |
 | [08-v3-portfolio-risk-alerts](08-v3-portfolio-risk-alerts.md) | Portfolio tracker, risk engine, portfolio AI summary, alerts | V3 | Phase 2–3 | — | A | Not started |
 | [09-v4-strategy-builder](09-v4-strategy-builder.md) | No-code strategy/scanner builder, NL→strategy (tech levels deferred) | V4 | Phase 3–4 | — | A | Not started |
 | [10-v5-backtesting-and-ml](10-v5-backtesting-and-ml.md) | Backtesting (integrity-gated) + ML ranking / signal quality | V5 | Phase 4 | — | A | Not started |
