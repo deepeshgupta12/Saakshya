@@ -1,6 +1,7 @@
-"""LLM provider abstraction (docs/14 §3, SPEC §9, D-027).
+"""LLM provider abstraction (docs/14 §3, SPEC §9, D-027, D-051).
 
-Default: OllamaProvider using qwen2.5:7b-instruct via the local Ollama server.
+Default: OllamaProvider using Gemma 4 (gemma4:4b cheap / gemma4:12b premium)
+via the local Ollama server (requires Ollama ≥ 0.31).
 Alternative: AnthropicProvider (Claude Haiku / premium) — requires ANTHROPIC_API_KEY.
 
 Swapping providers touches no business logic; only get_default_provider() changes.

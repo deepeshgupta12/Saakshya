@@ -142,7 +142,8 @@ class TestModelJson:
 
 class TestBuildStockPayload:
     def test_basic_build(self) -> None:
-        indicators = {"close": 500.0, "ret_3m_pct": 20.0, "sma50": 450.0}
+        # Critical field names match technical_indicators columns (D-039): ret_21d, sma_50
+        indicators = {"close": 500.0, "ret_21d": 20.0, "sma_50": 450.0}
         scanner    = {
             "composite_score": 78.0, "scanner": "momentum",
             "signal_tags": ["MOMENTUM_STRONG"],
@@ -156,7 +157,7 @@ class TestBuildStockPayload:
         assert p.data_confidence == DataConfidence.HIGH
 
     def test_missing_two_critical_fields_lowers_confidence(self) -> None:
-        indicators = {"vol_ratio": 2.0}  # missing close, ret_3m_pct, sma50
+        indicators = {"vol_ratio": 2.0}  # missing close, ret_21d, sma_50
         scanner    = {"composite_score": 60.0, "scanner": "momentum", "signal_tags": []}
         p = build_stock_payload(
             "X.NS", indicators, scanner, [],

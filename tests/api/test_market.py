@@ -64,9 +64,10 @@ def test_market_summary_shape(client) -> None:
     body = resp.json()
     assert body["error"] is None
     assert body["data"]["session_date"] == "2024-01-02"
-    assert "scanners" in body["data"]
-    assert "momentum" in body["data"]["scanners"]
-    assert body["data"]["scanners"]["momentum"]["count"] == 1
+    # API returns scanner_counts (not scanners) — see D-037
+    assert "scanner_counts" in body["data"]
+    assert "momentum" in body["data"]["scanner_counts"]
+    assert body["data"]["scanner_counts"]["momentum"]["count"] == 1
 
 
 def test_market_summary_no_data_returns_422(client) -> None:

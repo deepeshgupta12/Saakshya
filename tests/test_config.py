@@ -9,7 +9,9 @@ from app.config import Settings
 
 def test_defaults() -> None:
     settings = Settings(_env_file=None)
-    assert settings.model_version == "qwen2.5:7b-instruct"  # D-027: Ollama local-first default
+    assert settings.model_version == "gemma4:4b"  # D-051: Gemma 4 replaces qwen2.5 as Ollama default
+    assert settings.ai_ollama_model_cheap == "gemma4:4b"
+    assert settings.ai_ollama_model_premium == "gemma4:12b"
     assert settings.active_data_source == "yfinance"
     assert settings.history_period == "max"
 

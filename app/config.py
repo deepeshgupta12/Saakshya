@@ -36,18 +36,20 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=REPO_ROOT / "data")
     universe_path: Path = Field(default=REPO_ROOT / "data" / "universe.csv")
 
-    # AI layer — provider + model config (M4, docs/14 §3, D-027).
-    # Default: Ollama with qwen2.5:7b-instruct (local, no API key needed).
+    # AI layer — provider + model config (M4, docs/14 §3, D-027, D-051).
+    # Default: Ollama with Gemma 4 (requires Ollama ≥ 0.31, local, no API key needed).
+    # cheap tier  → gemma4:4b  (~3 GB, fast repetitive summarisation on M1 Mac).
+    # premium tier → gemma4:12b (~8 GB, complex synthesis; fits 16 GB M1 Mac).
     # Set SAAKSHYA_AI_PROVIDER=anthropic to use Claude Haiku via ANTHROPIC_API_KEY.
     ai_provider: str = Field(default="ollama")
     ai_ollama_base_url: str = Field(default="http://localhost:11434")
-    ai_ollama_model_cheap: str = Field(default="qwen2.5:7b-instruct")
-    ai_ollama_model_premium: str = Field(default="qwen2.5:7b-instruct")
+    ai_ollama_model_cheap: str = Field(default="gemma4:4b")
+    ai_ollama_model_premium: str = Field(default="gemma4:12b")
     ai_daily_call_ceiling: int = Field(default=500)
     ai_max_regen: int = Field(default=2)
     ai_model_tier_default: str = Field(default="cheap")
     # Legacy: kept for backwards compat; new code uses ai_ollama_model_cheap/premium.
-    model_version: str = Field(default="qwen2.5:7b-instruct")
+    model_version: str = Field(default="gemma4:4b")
 
     # Data source selection + fetch window.
     active_data_source: str = Field(default="yfinance")
