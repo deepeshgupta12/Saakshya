@@ -172,3 +172,100 @@ function toSectorSummary(s: {
     constituents:   s.constituents ?? [],
   };
 }
+
+/* ── Portfolio ── */
+
+const envelopeAny = z.object({ data: z.unknown(), meta: z.object({}).passthrough(), error: z.null().optional() });
+
+export async function fetchPortfolioOverview(portfolioId: string, asOf?: string) {
+  const qs = asOf ? `?date=${asOf}` : "";
+  const env = await apiFetch(`/v1/portfolio/${portfolioId}/overview${qs}`, envelopeAny);
+  return env.data as {
+    aggregate: Record<string, unknown>;
+    stock_allocation: Array<{ symbol: string; value: number | null; weight_pct: number | null }>;
+    sector_allocation: Array<{ sector: string; value: number; weight_pct: number | null }>;
+    cap_exposure: Array<{ band: string; value: number; weight_pct: number | null }>;
+  };
+}
+
+export async function fetchPortfolioPositions(portfolioId: string, asOf?: string) {
+  const qs = asOf ? `?date=${asOf}` : "";
+  const env = await apiFetch(`/v1/portfolio/${portfolioId}/positions${qs}`, envelopeAny);
+  return env.data as Array<{
+    symbol: string; exchange: string; quantity: number;
+    avg_buy_price: number; invested_value: number;
+    current_value: number | null; last_close: number | null;
+    unrealized_pnl: number | null; unrealized_pnl_pct: number | null;
+    realized_pnl: number; day_change_pct: number | null;
+    sector: string | null; market_cap_band: string | null;
+    data_confidence: string;
+  }>;
+}
+
+export async function fetchPortfolioHealth(portfolioId: string, asOf?: string) {
+  const qs = asOf ? `?date=${asOf}` : "";
+  const env = await apiFetch(`/v1/portfolio/${portfolioId}/health${qs}`, envelopeAny);
+  return env.data as {
+    portfolio_health_score: number | null;
+    band: string | null;
+    drivers: string[];
+    components: Array<Record<string, unknown>>;
+  };
+}
+
+export async function fetchPortfolioAiSummary(portfolioId: string, asOf?: string) {
+  const qs = asOf ? `?date=${asOf}` : "";
+  const env = await apiFetch(`/v1/portfolio/${portfolioId}/ai-summary${qs}`, envelopeAny);
+  return env.data as {
+    summary: string; suppressed: boolean; degraded: boolean; audit_id: string;
+  };
+}
+
+export async function addTransaction(portfolioId: string, txn: {
+  symbol: string; exchange: string; type: string;
+  quantity: number; price: number; trade_date: string; charges?: number;
+}) {
+  const env = await apiFetch(`/v1/portfolio/${portfolioId}/transactions`, envelopeAny, {
+    method: "POST", body: JSON.stringify(txn),
+  });
+  return env.data as { txn_id: string };
+}
+
+/* ── Strategy ── */
+
+export async function fetchStrategyLibrary() {
+  const env = await apiFetch("/v1/strategy/library", envelopeAny);
+  return env.data as Array<{
+    library_id: string; name: string; description: string; category: string;
+    strategy: Record<string, unknown>;
+  }>;
+}
+
+export async function fetchStrategies() {
+  const env = await apiFetch("/v1/strategy", envelopeAny);
+  return env.data as Array<{
+    strategy_id: string; name: string; version: number;
+    validation_status: string; is_library: boolean; created_at: string;
+  }>;
+}
+
+export async function compileScanner(strategyJson: Record<string, unknown>) {
+  const env = await apiFetch("/v1/strategy/compile-scanner", envelopeAny, {
+    method: "POST", body: JSON.stringify({ strategy_json: strategyJson }),
+  });
+  return env.data as { scanner_rule: Record<string, unknown>; disclaimer: string };
+}
+
+export async function strategyFromNl(text: string) {
+  const env = await apiFetch("/v1/strategy/from-nl", envelopeAny, {
+    method: "POST", body: JSON.stringify({ text }),
+  });
+  return env.data as {
+    strategy: Record<string, unknown> | null;
+    validation: { valid: boolean; errors: string[]; warnings: string[] };
+    guardrail_passed: boolean;
+    requires_confirmation: boolean;
+    confirmation_note: string;
+    errors: string[];
+  };
+}

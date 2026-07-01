@@ -4,7 +4,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, BarChart2, ScanLine, Grid3x3, Bookmark } from "lucide-react";
+import { Search, BarChart2, ScanLine, Grid3x3, Bookmark, Briefcase, Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth";
@@ -16,7 +16,11 @@ const NAV_ITEMS_PUBLIC = [
   { href: "/sectors",  label: "Sectors",  Icon: Grid3x3   },
 ] as const;
 
-const NAV_ITEM_WATCHLIST = { href: "/watchlist", label: "Watchlist", Icon: Bookmark } as const;
+const NAV_ITEMS_AUTH = [
+  { href: "/watchlist", label: "Watchlist", Icon: Bookmark  },
+  { href: "/portfolio", label: "Portfolio", Icon: Briefcase },
+  { href: "/strategy",  label: "Screeners", Icon: Layers    },
+] as const;
 
 export function TopNav() {
   const togglePalette = useUiStore((s) => s.toggleCommandPalette);
@@ -25,7 +29,7 @@ export function TopNav() {
   const [scrolled, setScrolled] = React.useState(false);
 
   const navItems = isAuthenticated()
-    ? [...NAV_ITEMS_PUBLIC, NAV_ITEM_WATCHLIST]
+    ? [...NAV_ITEMS_PUBLIC, ...NAV_ITEMS_AUTH]
     : NAV_ITEMS_PUBLIC;
 
   /* Glassmorphism activates after 8px scroll */

@@ -210,3 +210,108 @@ CREATE INDEX IF NOT EXISTS idx_corp_actions_stock ON corporate_actions (stock_id
 CREATE INDEX IF NOT EXISTS idx_scanner_results_date ON scanner_results (scanner, session_date);
 CREATE INDEX IF NOT EXISTS idx_ai_audit_log_timestamp ON ai_audit_log (timestamp);
 CREATE INDEX IF NOT EXISTS idx_ai_audit_log_symbol ON ai_audit_log (intent, agent);
+
+-- ============================================================
+-- V3 — Portfolio, Risk & Alerts (docs/16, docs/17, step 08)
+-- ============================================================
+
+-- Portfolios: one per user (v1); cost_basis_method controls FIFO vs WAVG reducer.
+-- Holdings are PII-class — never logged in plaintext (docs/23 §5).
+CREATE TABLE IF NOT EXISTS portfolios (
+    portfolio_id   VARCHAR NOT NULL PRIMARY KEY,
+    user_id        VARCHAR NOT NULL,
+    name           VARCHAR NOT NULL,
+    cost_basis_method VARCHAR NOT NULL DEFAULT 'FIFO',  -- FIFO | WEIGHTED_AVG
+    created_at     TIMESTAMP DEFAULT now(),
+    updated_at     TIMESTAMP DEFAULT now()
+);
+
+-- Transactions: the source of truth for cost basis and realized P&L (docs/16 §1.2).
+-- Append-only; corporate-action synthesizer inserts BONUS/SPLIT rows automatically.
+CREATE TABLE IF NOT EXISTS transactions (
+    txn_id         VARCHAR NOT NULL PRIMARY KEY,
+    portfolio_id   VARCHAR NOT NULL,
+    symbol         VARCHAR NOT NULL,
+    exchange       VARCHAR NOT NULL DEFAULT 'NSE',
+    type           VARCHAR NOT NULL,  -- BUY|SELL|BONUS|SPLIT|DIVIDEND|RIGHTS|MERGER_IN|MERGER_OUT
+    quantity       DOUBLE NOT NULL,
+    price          DOUBLE NOT NULL,
+    trade_date     DATE NOT NULL,
+    charges        DOUBLE NOT NULL DEFAULT 0.0,
+    source         VARCHAR NOT NULL DEFAULT 'MANUAL',  -- MANUAL | BROKER_SYNC | CORP_ACTION
+    corp_action_adjusted BOOLEAN NOT NULL DEFAULT FALSE,
+    as_of_version  INTEGER NOT NULL DEFAULT 1,
+    created_at     TIMESTAMP DEFAULT now()
+);
+
+-- Alert definitions: one rule per row, evaluated EOD after the pipeline (docs/17 §4).
+-- ra_gated=TRUE rows are never evaluated in Mode A (docs/17 §3).
+CREATE TABLE IF NOT EXISTS alert_definitions (
+    alert_id       VARCHAR NOT NULL PRIMARY KEY,
+    user_id        VARCHAR NOT NULL,
+    type           VARCHAR NOT NULL,   -- scanner_entry|price_above|portfolio_risk|…
+    scope_symbol   VARCHAR,
+    scope_scanner  VARCHAR,
+    scope_sector   VARCHAR,
+    condition_json VARCHAR NOT NULL DEFAULT '{}',
+    cadence        VARCHAR NOT NULL DEFAULT 'EOD',
+    channels_json  VARCHAR NOT NULL DEFAULT '["in_app"]',
+    throttle_json  VARCHAR NOT NULL DEFAULT '{"max_per_day":3,"cooldown_minutes":720}',
+    ra_gated       BOOLEAN NOT NULL DEFAULT FALSE,
+    enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at     TIMESTAMP DEFAULT now(),
+    updated_at     TIMESTAMP DEFAULT now()
+);
+
+-- Alert events: one row per fired alert instance (docs/17 §4 fired-alert shape).
+-- dedup_key uniqueness within the as_of_date prevents duplicate alerts (docs/17 §5).
+CREATE TABLE IF NOT EXISTS alert_events (
+    event_id       VARCHAR NOT NULL PRIMARY KEY,
+    alert_id       VARCHAR NOT NULL,
+    as_of_date     DATE NOT NULL,
+    payload_json   VARCHAR NOT NULL DEFAULT '{}',
+    dedup_key      VARCHAR NOT NULL,
+    rendered_text  VARCHAR NOT NULL,
+    guardrail_status VARCHAR NOT NULL DEFAULT 'passed',
+    channels_json  VARCHAR NOT NULL DEFAULT '[]',
+    delivery_log_json VARCHAR NOT NULL DEFAULT '[]',
+    created_at     TIMESTAMP DEFAULT now(),
+    UNIQUE (dedup_key, as_of_date)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_portfolio ON transactions (portfolio_id, trade_date);
+CREATE INDEX IF NOT EXISTS idx_transactions_symbol ON transactions (portfolio_id, symbol);
+CREATE INDEX IF NOT EXISTS idx_alert_events_date ON alert_events (as_of_date, alert_id);
+CREATE INDEX IF NOT EXISTS idx_alert_definitions_user ON alert_definitions (user_id, enabled);
+
+-- ============================================================
+-- V4 — Strategy / Scanner Builder (docs/19, step 09)
+-- ============================================================
+
+-- Strategy definitions: versioned; prior versions are immutable (audit trail).
+-- strategy_json holds the full typed condition tree per docs/19 §7.
+CREATE TABLE IF NOT EXISTS strategy_definitions (
+    strategy_id    VARCHAR NOT NULL PRIMARY KEY,
+    owner_user_id  VARCHAR NOT NULL,
+    name           VARCHAR NOT NULL,
+    version        INTEGER NOT NULL DEFAULT 1,
+    strategy_json  VARCHAR NOT NULL,
+    is_library     BOOLEAN NOT NULL DEFAULT FALSE,
+    validation_status VARCHAR NOT NULL DEFAULT 'PENDING',  -- PENDING|VALID|INVALID
+    created_at     TIMESTAMP DEFAULT now(),
+    updated_at     TIMESTAMP DEFAULT now()
+);
+
+-- Screener library: prebuilt Mode-A list-producing filters (docs/19 §; step 09).
+-- Seeded from app/strategy/library.py; read-only for end users.
+CREATE TABLE IF NOT EXISTS screener_library (
+    library_id     VARCHAR NOT NULL PRIMARY KEY,
+    name           VARCHAR NOT NULL,
+    description    VARCHAR,
+    category       VARCHAR,            -- momentum|value|technical|breadth
+    strategy_json  VARCHAR NOT NULL,
+    created_at     TIMESTAMP DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_strategy_owner ON strategy_definitions (owner_user_id);
+CREATE INDEX IF NOT EXISTS idx_screener_category ON screener_library (category);

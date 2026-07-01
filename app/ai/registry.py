@@ -34,6 +34,12 @@ _REGISTRY: dict[str, tuple[str, str, str, str]] = {
         "cheap",
         "458da252f0b5d4025045f90a389b79d45c13dd4d85f8a53bc8e118ae1142a85f",
     ),
+    "portfolio_summary": (
+        "v1",
+        "portfolio_summary.v1.txt",
+        "cheap",
+        "ed62f49130a7ca0f0aa9e744ad2ab44908830a9cc17a4252dc443cd4e2bed4d7",
+    ),
 }
 
 

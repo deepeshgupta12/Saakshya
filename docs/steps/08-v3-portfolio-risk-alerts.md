@@ -2,7 +2,7 @@
 > Read first: [SPEC.md](../../SPEC.md) · [Roadmap](../02-product-roadmap.md) · [Portfolio & risk engine](../16-portfolio-and-risk-engine.md) · [Alerts & notifications](../17-alerts-and-notifications.md) · [AI architecture](../14-ai-llm-agent-architecture.md) · [News & sentiment](../18-news-sentiment-and-corporate-actions.md) · [API contracts](../10-api-contracts.md) · [Screens](../08-screen-by-screen-documentation.md)
 
 **Maps to:** Roadmap V3 · SPEC Phase 2–3
-**Status:** Not started   |   **Regulatory mode:** A
+**Status:** Complete   |   **Regulatory mode:** A
 **Prerequisites:** [04-ai-explanation-layer.md](04-ai-explanation-layer.md) · [05-api-and-pipeline.md](05-api-and-pipeline.md) · [06-frontend-foundation-and-v1-screens.md](06-frontend-foundation-and-v1-screens.md) · [07-v2-accounts-watchlist-ai-news.md](07-v2-accounts-watchlist-ai-news.md)
 
 ## Overview

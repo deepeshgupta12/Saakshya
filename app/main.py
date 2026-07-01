@@ -20,10 +20,13 @@ from app.api.errors import SaakshyaError, generic_error_handler, saakshya_error_
 from app.api.routers import market, scanners, sectors, stocks
 from app.api.routers import auth, watchlists, ai as ai_router
 from app.api.routers import news as news_router
+from app.api.routers import portfolio as portfolio_router
+from app.api.routers import alerts as alerts_router
+from app.api.routers import strategies as strategies_router
 
 app = FastAPI(
     title="Saakshya API",
-    version="0.7.0",
+    version="0.8.0",
     description=(
         "Evidence-first Indian equity analytics for NSE/BSE. "
         "Mode A (pure analytics — not investment advice). "
@@ -71,6 +74,9 @@ app.include_router(auth.router)
 app.include_router(watchlists.router)
 app.include_router(ai_router.router)
 app.include_router(news_router.router)
+app.include_router(portfolio_router.router)
+app.include_router(alerts_router.router)
+app.include_router(strategies_router.router)
 
 
 @app.get("/health", tags=["meta"])

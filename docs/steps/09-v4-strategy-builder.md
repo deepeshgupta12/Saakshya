@@ -2,7 +2,7 @@
 > Read first: [SPEC.md](../../SPEC.md) · [Roadmap](../02-product-roadmap.md) · [Backtesting & strategy builder](../19-backtesting-and-strategy-builder.md) · [Scanner engine & scoring](../13-scanner-engine-and-scoring.md) · [AI/LLM agent architecture](../14-ai-llm-agent-architecture.md) · [Compliance & guardrails](../21-compliance-risk-and-guardrails.md)
 
 **Maps to:** Roadmap V4 (Mode-A subset) · SPEC Phase 3–4
-**Status:** Not started   |   **Regulatory mode:** A (per-stock entry/target/stop-loss/invalidation **LEVELS are RA-gated and NOT built here** — deferred to step 14 `15-cross-cutting…`/`14-v9-advisory-ra-gated.md`)
+**Status:** Complete   |   **Regulatory mode:** A (per-stock entry/target/stop-loss/invalidation **LEVELS are RA-gated and NOT built here** — deferred to step 14 `15-cross-cutting…`/`14-v9-advisory-ra-gated.md`)
 **Prerequisites:** [00-phase-0-derisk.md](00-phase-0-derisk.md) (M3b score validation), V1 scanner engine + V2/V3 AI layer (earlier step files: `01-v1-eod-core.md` … `08-v3-portfolio-and-alerts.md`)
 
 ## Overview

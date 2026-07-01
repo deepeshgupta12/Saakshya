@@ -8,6 +8,8 @@ import {
   fetchMarketSummary, fetchScannerList, fetchScannerResults,
   fetchStockOverview, fetchStockTechnicals, fetchStockAiSummary,
   fetchSectors, fetchSectorDetail, fetchMarketBrief,
+  fetchPortfolioPositions, fetchPortfolioOverview, fetchPortfolioHealth,
+  fetchPortfolioAiSummary, fetchStrategyLibrary, fetchStrategies,
 } from "@/lib/api/client";
 
 /* Market */
@@ -88,5 +90,56 @@ export function useSector(slug: string) {
     queryKey: QK.sectors.detail(slug),
     queryFn: () => fetchSectorDetail(slug),
     enabled: !!slug,
+  });
+}
+
+/* Portfolio */
+export function usePortfolioPositions(portfolioId: string, asOf?: string) {
+  return useQuery({
+    queryKey: QK.portfolio.positions(portfolioId, asOf),
+    queryFn: () => fetchPortfolioPositions(portfolioId, asOf),
+    enabled: !!portfolioId,
+  });
+}
+
+export function usePortfolioOverview(portfolioId: string, asOf?: string) {
+  return useQuery({
+    queryKey: QK.portfolio.overview(portfolioId, asOf),
+    queryFn: () => fetchPortfolioOverview(portfolioId, asOf),
+    enabled: !!portfolioId,
+  });
+}
+
+export function usePortfolioHealth(portfolioId: string, asOf?: string) {
+  return useQuery({
+    queryKey: QK.portfolio.health(portfolioId, asOf),
+    queryFn: () => fetchPortfolioHealth(portfolioId, asOf),
+    enabled: !!portfolioId,
+  });
+}
+
+export function usePortfolioAiSummary(portfolioId: string, asOf?: string) {
+  return useQuery({
+    queryKey: QK.portfolio.aiSummary(portfolioId, asOf),
+    queryFn: () => fetchPortfolioAiSummary(portfolioId, asOf),
+    enabled: !!portfolioId,
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+/* Strategy */
+export function useStrategyLibrary() {
+  return useQuery({
+    queryKey: QK.strategy.library(),
+    queryFn: fetchStrategyLibrary,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+export function useStrategies() {
+  return useQuery({
+    queryKey: QK.strategy.list(),
+    queryFn: fetchStrategies,
   });
 }

@@ -24,4 +24,14 @@ export const QK = {
   ai: {
     marketBrief: (date?: string) => ["ai", "market-brief", date ?? "latest"] as const,
   },
+  portfolio: {
+    positions:  (id: string, asOf?: string) => ["portfolio", id, "positions",  asOf ?? "latest"] as const,
+    overview:   (id: string, asOf?: string) => ["portfolio", id, "overview",   asOf ?? "latest"] as const,
+    health:     (id: string, asOf?: string) => ["portfolio", id, "health",     asOf ?? "latest"] as const,
+    aiSummary:  (id: string, asOf?: string) => ["portfolio", id, "ai-summary", asOf ?? "latest"] as const,
+  },
+  strategy: {
+    library: ()           => ["strategy", "library"] as const,
+    list:    ()           => ["strategy", "list"]    as const,
+  },
 } as const;
