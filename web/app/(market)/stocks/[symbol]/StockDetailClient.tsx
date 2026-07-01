@@ -45,20 +45,20 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
           <section>
-            <h2 className="text-xs font-semibold text-[--text-muted] uppercase tracking-wide mb-3">
+            <h2 className="text-xs font-semibold text-(--text-muted) uppercase tracking-wide mb-3">
               Technical Indicators
             </h2>
             {techLoading ? (
-              <div className="h-32 animate-pulse rounded-[--radius-lg] bg-[--surface-3]" />
+              <div className="h-32 animate-pulse rounded-(--radius-lg) bg-(--surface-3)" />
             ) : tech ? (
               <IndicatorPanel tech={tech} />
             ) : (
-              <p className="text-sm text-[--text-muted]">Run the pipeline to compute indicators.</p>
+              <p className="text-sm text-(--text-muted)">Run the pipeline to compute indicators.</p>
             )}
           </section>
 
           <section>
-            <h2 className="text-xs font-semibold text-[--text-muted] uppercase tracking-wide mb-3">
+            <h2 className="text-xs font-semibold text-(--text-muted) uppercase tracking-wide mb-3">
               Key Stats
             </h2>
             <KeyStats overview={overview} />

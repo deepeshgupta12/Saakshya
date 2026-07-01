@@ -28,16 +28,16 @@ export function IndexStrip({ summary }: { summary: MarketSummary }) {
           <Link
             href={`/scanners/${scanner.replace(/_/g, "-")}`}
             className={cn(
-              "flex items-center gap-2 rounded-[--radius-md] border border-[--border-subtle]",
-              "bg-[--surface-2] px-3 py-2 text-xs",
-              "hover:border-[--border-strong] hover:bg-[--surface-3]",
-              "transition-all duration-[--motion-fast] cursor-pointer"
+              "flex items-center gap-2 rounded-(--radius-md) border border-(--border-subtle)",
+              "bg-(--surface-2) px-3 py-2 text-xs",
+              "hover:border-(--border-strong) hover:bg-(--surface-3)",
+              "transition-all duration-(--motion-fast) cursor-pointer"
             )}
           >
-            <span className="text-[--text-muted] capitalize">
+            <span className="text-(--text-muted) capitalize">
               {(label || scanner).replace(/_/g, " ")}
             </span>
-            <span className="font-mono font-semibold tabular-nums text-[--accent]">{count}</span>
+            <span className="font-mono font-semibold tabular-nums text-(--accent)">{count}</span>
           </Link>
         </motion.div>
       ))}
@@ -55,12 +55,12 @@ export function BreadthPanel({ summary }: { summary: MarketSummary }) {
     <Card>
       <CardHeader>
         <CardTitle>Market Breadth</CardTitle>
-        <Activity className="h-4 w-4 text-[--text-muted] shrink-0" aria-hidden />
+        <Activity className="h-4 w-4 text-(--text-muted) shrink-0" aria-hidden />
       </CardHeader>
       <div className="flex flex-wrap gap-6">
-        <CountUpStat label="Advancing" value={adv} color="text-[--bullish]" Icon={TrendingUp} />
-        <CountUpStat label="Declining" value={dec} color="text-[--bearish]" Icon={TrendingDown} />
-        <CountUpStat label="Universe" value={total} color="text-[--text-secondary]" />
+        <CountUpStat label="Advancing" value={adv} color="text-(--bullish)" Icon={TrendingUp} />
+        <CountUpStat label="Declining" value={dec} color="text-(--bearish)" Icon={TrendingDown} />
+        <CountUpStat label="Universe" value={total} color="text-(--text-secondary)" />
       </div>
     </Card>
   );
@@ -87,7 +87,7 @@ function CountUpStat({
         {Icon && <Icon className="h-4 w-4 shrink-0" aria-hidden />}
         <motion.span>{displayed}</motion.span>
       </div>
-      <p className="text-xs text-[--text-muted] mt-0.5">{label}</p>
+      <p className="text-xs text-(--text-muted) mt-0.5">{label}</p>
     </div>
   );
 }
@@ -109,25 +109,25 @@ export function SectorHeatmap({ sectors }: { sectors: SectorSummary[] }) {
             <Link
               href={`/sectors/${sec.slug}`}
               className={cn(
-                "block rounded-[--radius-lg] border p-3",
-                "hover:shadow-[--shadow-elev-2]",
-                "transition-all duration-[--motion-fast] cursor-pointer",
+                "block rounded-(--radius-lg) border p-3",
+                "hover:shadow-(--shadow-elev-2)",
+                "transition-all duration-(--motion-fast) cursor-pointer",
                 isPositive
-                  ? "border-[--bullish]/20 bg-[--bullish]/5 hover:bg-[--bullish]/10"
-                  : "border-[--bearish]/20 bg-[--bearish]/5 hover:bg-[--bearish]/10"
+                  ? "border-(--bullish)/20 bg-(--bullish)/5 hover:bg-(--bullish)/10"
+                  : "border-(--bearish)/20 bg-(--bearish)/5 hover:bg-(--bearish)/10"
               )}
             >
-              <p className="text-xs font-medium text-[--text-primary] leading-tight line-clamp-1">
+              <p className="text-xs font-medium text-(--text-primary) leading-tight line-clamp-1">
                 {sec.name}
               </p>
               <p className={cn(
                 "mt-1 text-sm font-bold font-mono tabular-nums",
-                isPositive ? "text-[--bullish]" : "text-[--bearish]"
+                isPositive ? "text-(--bullish)" : "text-(--bearish)"
               )}>
                 {isPositive ? "+" : ""}{pct.toFixed(2)}%
               </p>
               {sec.strength_score != null && (
-                <p className="mt-0.5 text-[10px] text-[--text-muted] tabular-nums">
+                <p className="mt-0.5 text-[10px] text-(--text-muted) tabular-nums">
                   Score {Math.round(sec.strength_score)}
                 </p>
               )}
@@ -155,7 +155,7 @@ export function AiMarketSummaryCard({
 }) {
   const { reduced } = useMotion();
   return (
-    <Card className="border-l-[3px] border-l-[--ai] relative overflow-hidden">
+    <Card className="border-l-[3px] border-l-(--ai) relative overflow-hidden">
       {/* AI glow accent — subtle, non-distracting */}
       <div
         className="pointer-events-none absolute inset-0 rounded-[inherit]"
@@ -169,7 +169,7 @@ export function AiMarketSummaryCard({
       </CardHeader>
 
       {suppressed ? (
-        <p className="text-sm text-[--text-muted] italic">
+        <p className="text-sm text-(--text-muted) italic">
           Summary unavailable — required market inputs are missing.
         </p>
       ) : (
@@ -179,10 +179,10 @@ export function AiMarketSummaryCard({
           animate="visible"
         >
           {headline && (
-            <p className="text-sm font-medium text-[--text-primary] mb-2 leading-snug">{headline}</p>
+            <p className="text-sm font-medium text-(--text-primary) mb-2 leading-snug">{headline}</p>
           )}
           {narrative && (
-            <p className="text-xs text-[--text-secondary] leading-relaxed">{narrative}</p>
+            <p className="text-xs text-(--text-secondary) leading-relaxed">{narrative}</p>
           )}
         </motion.div>
       )}
@@ -224,7 +224,7 @@ export function MarketMoversTable({
   if (!movers.length) return <EmptyState title={emptyText} />;
   return (
     <div>
-      <h3 className="text-[10px] font-semibold text-[--text-muted] mb-3 uppercase tracking-wider">
+      <h3 className="text-[10px] font-semibold text-(--text-muted) mb-3 uppercase tracking-wider">
         {title}
       </h3>
       <div className="space-y-0.5">
@@ -236,18 +236,18 @@ export function MarketMoversTable({
               key={m.symbol}
               href={`/stocks/${m.symbol}`}
               className={cn(
-                "flex items-center justify-between rounded-[--radius-md] px-2 py-2",
-                "hover:bg-[--surface-3] transition-colors duration-[--motion-fast] cursor-pointer",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--accent]"
+                "flex items-center justify-between rounded-(--radius-md) px-2 py-2",
+                "hover:bg-(--surface-3) transition-colors duration-(--motion-fast) cursor-pointer",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--accent)"
               )}
             >
-              <span className="text-sm font-semibold text-[--text-primary] font-mono tracking-wide">
+              <span className="text-sm font-semibold text-(--text-primary) font-mono tracking-wide">
                 {m.symbol}
               </span>
               {pct != null && (
                 <span className={cn(
                   "text-sm font-medium font-mono tabular-nums",
-                  pos ? "text-[--bullish]" : "text-[--bearish]"
+                  pos ? "text-(--bullish)" : "text-(--bearish)"
                 )}>
                   {pos ? "+" : ""}{pct.toFixed(2)}%
                 </span>

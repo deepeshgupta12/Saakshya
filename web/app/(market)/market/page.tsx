@@ -20,8 +20,8 @@ export default function MarketPage() {
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-[--text-primary]">Market Dashboard</h1>
-          <p className="text-sm text-[--text-muted]">End-of-day analytics · not investment advice</p>
+          <h1 className="text-xl font-bold text-(--text-primary)">Market Dashboard</h1>
+          <p className="text-sm text-(--text-muted)">End-of-day analytics · not investment advice</p>
         </div>
         <NotAdviceBanner className="hidden sm:flex max-w-sm shrink-0" />
       </div>
@@ -37,13 +37,13 @@ function MarketLoadingSkeleton() {
   return (
     <div className="space-y-4 animate-pulse">
       <div className="flex gap-3">
-        {[1,2,3,4].map((i) => <div key={i} className="h-10 w-28 rounded-[--radius-md] bg-[--surface-3]" />)}
+        {[1,2,3,4].map((i) => <div key={i} className="h-10 w-28 rounded-(--radius-md) bg-(--surface-3)" />)}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="h-32 lg:col-span-2 rounded-[--radius-lg] bg-[--surface-3]" />
-        <div className="h-32 rounded-[--radius-lg] bg-[--surface-3]" />
+        <div className="h-32 lg:col-span-2 rounded-(--radius-lg) bg-(--surface-3)" />
+        <div className="h-32 rounded-(--radius-lg) bg-(--surface-3)" />
       </div>
-      <div className="h-48 rounded-[--radius-lg] bg-[--surface-3]" />
+      <div className="h-48 rounded-(--radius-lg) bg-(--surface-3)" />
     </div>
   );
 }

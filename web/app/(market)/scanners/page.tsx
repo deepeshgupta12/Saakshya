@@ -14,8 +14,8 @@ export default function ScannersPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-[--text-primary]">Scanners</h1>
-        <p className="text-sm text-[--text-muted] mt-1">
+        <h1 className="text-xl font-bold text-(--text-primary)">Scanners</h1>
+        <p className="text-sm text-(--text-muted) mt-1">
           Scan results identify stocks that meet specific evidence-based criteria — not recommendations.
         </p>
       </div>

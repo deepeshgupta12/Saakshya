@@ -106,6 +106,8 @@ def get_scanner_results(
     )
 
     # Enrich with stock name, sector, and last close/change from daily_ohlc.
+    # Join via stock_master.primary_symbol — exchange_symbols has '.NS' suffix
+    # which never matches the bare primary_symbol returned by the repository.
     symbols = [r["symbol"] for r in rows] if rows else []
     enrichment: dict[str, dict[str, Any]] = {}
     if symbols:
@@ -113,28 +115,26 @@ def get_scanner_results(
         rich_rows = conn.execute(
             f"""
             SELECT
-                es.symbol,
+                sm.primary_symbol AS symbol,
                 sm.name,
-                sec.name  AS sector,
+                sec.name          AS sector,
                 o.close_adj,
-                o2.close_adj AS prev_close
-            FROM exchange_symbols es
-            JOIN stock_master sm  ON sm.stock_id = es.stock_id
+                o2.close_adj      AS prev_close
+            FROM stock_master sm
             LEFT JOIN sector_master sec ON sec.sector_id = sm.sector_id
-            LEFT JOIN daily_ohlc o  ON o.stock_id  = es.stock_id
+            LEFT JOIN daily_ohlc o  ON o.stock_id  = sm.stock_id
                                    AND o.session_date = ?
                                    AND o.as_of_version = 1
-            LEFT JOIN daily_ohlc o2 ON o2.stock_id = es.stock_id
+            LEFT JOIN daily_ohlc o2 ON o2.stock_id = sm.stock_id
                                    AND o2.session_date = (
                                        SELECT MAX(session_date)
                                        FROM daily_ohlc
-                                       WHERE stock_id = es.stock_id
+                                       WHERE stock_id = sm.stock_id
                                          AND session_date < ?
                                          AND as_of_version = 1
                                    )
                                    AND o2.as_of_version = 1
-            WHERE es.symbol IN ({placeholders})
-              AND es.valid_to IS NULL
+            WHERE sm.primary_symbol IN ({placeholders})
             """,
             [as_of, as_of, *symbols],
         ).fetchall()

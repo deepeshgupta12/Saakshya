@@ -33,11 +33,11 @@ export function StockHeader({
     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-6">
       <div>
         <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-bold text-[--text-primary] tracking-tight font-mono">{symbol}</h1>
+          <h1 className="text-2xl font-bold text-(--text-primary) tracking-tight font-mono">{symbol}</h1>
           {sector && <Badge>{sector}</Badge>}
         </div>
         {sessionDate && (
-          <p className="text-xs text-[--text-muted] mt-1 font-mono">
+          <p className="text-xs text-(--text-muted) mt-1 font-mono">
             As of {new Date(sessionDate).toLocaleDateString("en-IN", {
               day: "numeric", month: "short", year: "numeric",
             })}
@@ -57,13 +57,13 @@ export function StockHeader({
       <div className="text-right sm:text-right shrink-0">
         {close != null ? (
           <>
-            <p className="text-3xl font-bold tabular-nums text-[--text-primary] font-mono tracking-tight">
+            <p className="text-3xl font-bold tabular-nums text-(--text-primary) font-mono tracking-tight">
               {formatPrice(close)}
             </p>
             {changePct != null && (
               <p className={cn(
                 "flex items-center justify-end gap-1 text-sm font-medium tabular-nums font-mono mt-0.5",
-                isPositive ? "text-[--bullish]" : "text-[--bearish]"
+                isPositive ? "text-(--bullish)" : "text-(--bearish)"
               )}>
                 {isPositive
                   ? <TrendingUp className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -74,7 +74,7 @@ export function StockHeader({
             )}
           </>
         ) : (
-          <p className="text-[--text-muted] text-sm">Price unavailable</p>
+          <p className="text-(--text-muted) text-sm">Price unavailable</p>
         )}
       </div>
     </div>
@@ -86,10 +86,10 @@ export function ScannerMembershipChips({ memberships }: { memberships: string[] 
   if (!memberships.length) return null;
   return (
     <div>
-      <p className="text-[10px] uppercase tracking-widest text-[--text-muted] mb-2">Appears in scanners</p>
+      <p className="text-[10px] uppercase tracking-widest text-(--text-muted) mb-2">Appears in scanners</p>
       <div className="flex flex-wrap gap-1.5">
         {memberships.map((m) => (
-          <Chip key={m} className="text-[--accent] text-[10px]">
+          <Chip key={m} className="text-(--accent) text-[10px]">
             {m.replace(/_/g, " ")}
           </Chip>
         ))}
@@ -118,10 +118,10 @@ export function KeyStats({ overview }: { overview: StockOverview }) {
         <motion.div
           key={label}
           variants={staggerRow}
-          className="rounded-[--radius-md] bg-[--surface-2] border border-[--border-subtle] px-3 py-2.5"
+          className="rounded-(--radius-md) bg-(--surface-2) border border-(--border-subtle) px-3 py-2.5"
         >
-          <p className="text-[10px] text-[--text-muted] uppercase tracking-wide">{label}</p>
-          <p className="text-sm font-semibold tabular-nums text-[--text-primary] font-mono mt-0.5">{value}</p>
+          <p className="text-[10px] text-(--text-muted) uppercase tracking-wide">{label}</p>
+          <p className="text-sm font-semibold tabular-nums text-(--text-primary) font-mono mt-0.5">{value}</p>
         </motion.div>
       ))}
     </motion.div>
@@ -146,7 +146,7 @@ export function IndicatorPanel({ tech }: { tech: StockTechnicals }) {
   ].filter((i) => i.value != null);
 
   if (!indicators.length) {
-    return <p className="text-sm text-[--text-muted]">Technical indicators not available.</p>;
+    return <p className="text-sm text-(--text-muted)">Technical indicators not available.</p>;
   }
 
   return (
@@ -154,10 +154,10 @@ export function IndicatorPanel({ tech }: { tech: StockTechnicals }) {
       {indicators.map(({ label, value }) => (
         <div
           key={label}
-          className="rounded-[--radius-md] bg-[--surface-2] border border-[--border-subtle] px-3 py-2.5"
+          className="rounded-(--radius-md) bg-(--surface-2) border border-(--border-subtle) px-3 py-2.5"
         >
-          <p className="text-[10px] text-[--text-muted] uppercase tracking-wide">{label}</p>
-          <p className="text-sm font-semibold tabular-nums text-[--text-primary] font-mono mt-0.5">
+          <p className="text-[10px] text-(--text-muted) uppercase tracking-wide">{label}</p>
+          <p className="text-sm font-semibold tabular-nums text-(--text-primary) font-mono mt-0.5">
             {formatNumber(value, 2)}
           </p>
         </div>
@@ -186,12 +186,12 @@ export function AiStockSummaryCard({
 
   if (suppressed || !aiSummary) {
     return (
-      <Card className="border-l-[3px] border-l-[--ai]">
+      <Card className="border-l-[3px] border-l-(--ai)">
         <CardHeader>
           <CardTitle>AI Stock Summary</CardTitle>
           <Badge variant="ai" aria-label="AI-generated content">AI</Badge>
         </CardHeader>
-        <p className="text-sm text-[--text-muted] italic">
+        <p className="text-sm text-(--text-muted) italic">
           AI summary unavailable — required inputs are missing.
         </p>
         <NotAdviceBanner className="mt-4" />
@@ -201,7 +201,7 @@ export function AiStockSummaryCard({
 
   return (
     <>
-      <Card className="border-l-[3px] border-l-[--ai] relative overflow-hidden">
+      <Card className="border-l-[3px] border-l-(--ai) relative overflow-hidden">
         {/* Violet radial glow — subtle depth */}
         <div
           className="pointer-events-none absolute inset-0 rounded-[inherit]"
@@ -214,7 +214,7 @@ export function AiStockSummaryCard({
           <div className="flex items-center gap-2">
             <Badge variant="ai" aria-label="AI-generated content">AI</Badge>
             {aiSummary.model_version && (
-              <span className="text-[10px] text-[--text-muted] font-mono">{aiSummary.model_version}</span>
+              <span className="text-[10px] text-(--text-muted) font-mono">{aiSummary.model_version}</span>
             )}
           </div>
         </CardHeader>
@@ -224,12 +224,12 @@ export function AiStockSummaryCard({
           initial={reduced ? "visible" : "hidden"}
           animate="visible"
         >
-          <p className="text-sm text-[--text-secondary] leading-relaxed">{aiSummary.summary}</p>
+          <p className="text-sm text-(--text-secondary) leading-relaxed">{aiSummary.summary}</p>
 
           {aiSummary.risk_notes?.length > 0 && (
             <div className="mt-3 space-y-1.5">
               {aiSummary.risk_notes.map((note, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs text-[--warning]">
+                <div key={i} className="flex items-start gap-2 text-xs text-(--warning)">
                   <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" aria-hidden />
                   <span>{note}</span>
                 </div>
@@ -262,15 +262,15 @@ export function RiskBadge({ riskFlags }: { riskFlags?: string[] }) {
   if (!riskFlags?.length) return null;
   return (
     <motion.div
-      className="flex items-center gap-2 rounded-[--radius-md] border border-[--warning]/30 bg-[--warning]/5 px-3 py-2"
+      className="flex items-center gap-2 rounded-(--radius-md) border border-(--warning)/30 bg-(--warning)/5 px-3 py-2"
       variants={riskPulse}
       initial={reduced ? "pulse" : "initial"}
       animate="pulse"
     >
-      <AlertTriangle className="h-3.5 w-3.5 text-[--warning] shrink-0" aria-hidden />
-      <p className="text-xs text-[--warning] font-medium">{riskFlags[0]}</p>
+      <AlertTriangle className="h-3.5 w-3.5 text-(--warning) shrink-0" aria-hidden />
+      <p className="text-xs text-(--warning) font-medium">{riskFlags[0]}</p>
       {riskFlags.length > 1 && (
-        <span className="text-[10px] text-[--text-muted] ml-auto">
+        <span className="text-[10px] text-(--text-muted) ml-auto">
           +{riskFlags.length - 1} more
         </span>
       )}
@@ -286,7 +286,7 @@ export function StockSkeleton() {
         <Skeleton className="h-12 w-40" />
         <Skeleton className="h-12 w-32" />
       </div>
-      <Skeleton className="h-72 w-full rounded-[--radius-lg]" />
+      <Skeleton className="h-72 w-full rounded-(--radius-lg)" />
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         {[1,2,3,4,5].map((i) => <Skeleton key={i} className="h-14" />)}
       </div>

@@ -55,8 +55,7 @@ def get_market_summary(
     }
     total_members: int = sum(int(r[1]) for r in rows)
 
-    advance_count = _momentum_count(conn, as_of, min_score=60.0)
-    decline_count = _momentum_count(conn, as_of, max_score=40.0)
+    advance_count, decline_count = _ohlc_advance_decline(conn, as_of)
 
     data = {
         "session_date":   str(as_of),
@@ -80,17 +79,27 @@ def _f(v: object) -> float | None:
         return None
 
 
-def _momentum_count(conn: Any, session_date: Any, *, min_score: float | None = None,
-                    max_score: float | None = None) -> int:
-    where = "scanner='momentum' AND session_date=? AND as_of_version=1"
-    params: list[object] = [session_date]
-    if min_score is not None:
-        where += " AND composite_score >= ?"
-        params.append(min_score)
-    if max_score is not None:
-        where += " AND composite_score <= ?"
-        params.append(max_score)
+def _ohlc_advance_decline(conn: Any, session_date: Any) -> tuple[int, int]:
+    """Compute advance/decline counts by comparing session_date vs previous session OHLC."""
     row = conn.execute(
-        f"SELECT count(*) FROM scanner_results WHERE {where}", params
+        """
+        WITH prev AS (
+            SELECT stock_id, close_adj AS prev_close
+            FROM daily_ohlc
+            WHERE session_date = (
+                SELECT MAX(session_date) FROM daily_ohlc
+                WHERE session_date < ? AND as_of_version = 1
+            ) AND as_of_version = 1
+        )
+        SELECT
+            SUM(CASE WHEN o.close_adj > p.prev_close THEN 1 ELSE 0 END),
+            SUM(CASE WHEN o.close_adj < p.prev_close THEN 1 ELSE 0 END)
+        FROM daily_ohlc o
+        JOIN prev p ON p.stock_id = o.stock_id
+        WHERE o.session_date = ? AND o.as_of_version = 1
+        """,
+        [session_date, session_date],
     ).fetchone()
-    return int(row[0]) if row else 0
+    if row is None or row[0] is None:
+        return 0, 0
+    return int(row[0]), int(row[1])

@@ -151,14 +151,13 @@ def get_sector_detail(
                 ) AND as_of_version = 1
             )
             SELECT
-                es.symbol,
+                sm.primary_symbol AS symbol,
                 sm.name,
                 CASE WHEN p.prev_close IS NOT NULL AND p.prev_close <> 0
                      THEN ROUND((o.close_adj - p.prev_close) / p.prev_close * 100.0, 2)
                      ELSE NULL END AS chg_pct
             FROM daily_ohlc o
             JOIN stock_master sm ON sm.stock_id = o.stock_id
-            JOIN exchange_symbols es ON es.stock_id = o.stock_id AND es.valid_to IS NULL
             LEFT JOIN prev p ON p.stock_id = o.stock_id
             WHERE o.session_date = ? AND o.as_of_version = 1
               AND sm.sector_id = ?

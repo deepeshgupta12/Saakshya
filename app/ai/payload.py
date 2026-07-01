@@ -173,7 +173,8 @@ def build_stock_payload(
     signal_tags: list[str] = list(scanner_result.get("signal_tags", []))
 
     # Data confidence from completeness of critical fields.
-    critical = {"close", "ret_3m_pct", "sma50"}
+    # Keys must match technical_indicators column names (underscores, not camelCase).
+    critical = {"close", "ret_21d", "sma_50"}
     missing  = critical - set(indicators)
     if len(missing) >= 2:
         confidence = DataConfidence.LOW
