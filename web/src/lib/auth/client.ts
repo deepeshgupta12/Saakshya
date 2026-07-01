@@ -54,3 +54,12 @@ export async function apiLogout(accessToken: string, refresh_token: string): Pro
     body:    JSON.stringify({ refresh_token }),
   });
 }
+
+export interface OAuthResult extends TokenPair {
+  user_id: string;
+  email:   string;
+}
+
+export async function apiOAuthGoogle(id_token: string): Promise<OAuthResult> {
+  return authFetch<OAuthResult>("/api/auth/oauth/google", { id_token });
+}

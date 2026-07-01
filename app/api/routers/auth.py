@@ -1,8 +1,8 @@
-"""Auth endpoints — POST /api/auth/{register|login|refresh|logout} (docs/10 §1, docs/23 §1).
+"""Auth endpoints — POST /api/auth/{register|login|refresh|logout|oauth/google}.
 
 Local-first: HS256 JWT, Argon2id passwords, DuckDB token store.
 Mode-A compliant: no financial data, no PII beyond email + display_name.
-Rate limits: 5/min register (IP), 10/min login (IP).
+Rate limits: auth_rate_limit_dep on register/login.
 """
 
 from __future__ import annotations
@@ -12,11 +12,13 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from jose import JWTError
 from pydantic import BaseModel, EmailStr
 
 from app.api.deps import AuthUserDep, DbDep
 from app.api.envelope import ok
 from app.api.ratelimit import auth_rate_limit_dep
+from app.auth.oauth import validate_google_id_token, get_or_create_google_user
 from app.auth.passwords import hash_password, verify_password, MIN_LENGTH
 from app.auth.tokens import (
     create_access_token,
@@ -26,6 +28,7 @@ from app.auth.tokens import (
     make_family_id,
     refresh_expiry,
 )
+from app.config import get_settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -47,6 +50,10 @@ class LoginBody(BaseModel):
 
 class RefreshBody(BaseModel):
     refresh_token: str
+
+
+class GoogleOAuthBody(BaseModel):
+    id_token: str
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -185,6 +192,34 @@ def refresh_token(
         [new_token_id, family_id, user_id, refresh_hash, expires],
     )
     return ok({"access_token": access, "refresh_token": raw_refresh, "expires_in": 900, "plan": plan})
+
+
+@router.post("/oauth/google", status_code=200)
+def oauth_google(
+    body: GoogleOAuthBody,
+    conn: DbDep,
+) -> dict[str, Any]:
+    """Validate a Google ID token and return our JWT pair.
+
+    Requires GOOGLE_CLIENT_ID env var. Returns 503 when unconfigured.
+    Rate-limit via the auth bucket is enforced by the gateway layer.
+    """
+    client_id: str | None = getattr(get_settings(), "google_client_id", None)
+    if not client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured on this server.",
+        )
+    try:
+        claims = validate_google_id_token(body.id_token, client_id)
+    except (ValueError, JWTError, Exception) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Google ID token: {exc}",
+        ) from exc
+    user_id, plan = get_or_create_google_user(conn, claims)
+    tokens = _issue_token_pair(conn, user_id, plan)
+    return ok({"user_id": user_id, "email": claims.get("email", ""), **tokens})
 
 
 @router.post("/logout")

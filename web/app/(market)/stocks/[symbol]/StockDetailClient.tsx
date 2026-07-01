@@ -3,7 +3,7 @@ import * as React from "react";
 import { useStockOverview, useStockTechnicals, useStockAiSummary } from "@/hooks";
 import {
   StockHeader, ScannerMembershipChips, KeyStats,
-  IndicatorPanel, AiStockSummaryCard, StockSkeleton,
+  IndicatorPanel, AiStockSummaryCard, StockSkeleton, NewsPanel,
 } from "@/components/stock";
 import { PriceChart } from "@/components/charts/PriceChart";
 import { ErrorState } from "@/components/ui";
@@ -76,6 +76,9 @@ export function StockDetailClient({ symbol }: { symbol: string }) {
           />
         </div>
       </div>
+
+      {/* News & sentiment panel — auth-gated, premium-gated, below-threshold filtered */}
+      <NewsPanel symbol={symbol} />
     </div>
   );
 }

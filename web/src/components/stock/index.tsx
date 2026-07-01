@@ -294,3 +294,5 @@ export function StockSkeleton() {
     </div>
   );
 }
+
+export { NewsPanel } from "./NewsPanel";

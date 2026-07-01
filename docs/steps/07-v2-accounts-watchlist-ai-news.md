@@ -2,7 +2,7 @@
 > Read first: [SPEC.md](../../SPEC.md) · [Roadmap](../02-product-roadmap.md) · [Feature modules](../04-feature-modules.md) · [AI architecture](../14-ai-llm-agent-architecture.md) · [News & sentiment](../18-news-sentiment-and-corporate-actions.md) · [Security & auth](../23-security-auth-and-privacy.md) · [API contracts](../10-api-contracts.md) · [Screens](../08-screen-by-screen-documentation.md)
 
 **Maps to:** Roadmap V2 · SPEC Phase 2
-**Status:** In progress — Auth, Watchlist, AI brief backend + frontend complete (2026-07-01); OAuth, IDOR tests, news sentiment pending   |   **Regulatory mode:** A
+**Status:** Complete (2026-07-01) — Auth, IDOR suite, Watchlist (backend + frontend), OAuth stub (Google OIDC route + oauth_identities), AI brief, News pipeline (DB schema, RSS ingestor, entity resolver, heuristic sentiment, API endpoints, stock-page UI) all implemented. Finance-tuned ML sentiment classifier deferred to step 15.   |   **Regulatory mode:** A
 **Prerequisites:** [04-ai-explanation-layer.md](04-ai-explanation-layer.md) · [05-api-and-pipeline.md](05-api-and-pipeline.md) · [06-frontend-foundation-and-v1-screens.md](06-frontend-foundation-and-v1-screens.md)
 
 ## Overview

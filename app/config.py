@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Generated once at init; set SAAKSHYA_SECRET_KEY in .env for persistence.
     secret_key: str = Field(default="dev-local-secret-change-in-prod-32chars!!")
 
+    # OAuth social sign-in (M7 §5) — set GOOGLE_CLIENT_ID to enable Google sign-in.
+    google_client_id: str | None = Field(default=None, alias="GOOGLE_CLIENT_ID")
+
     # API rate limits (requests per minute, per IP/client).
     api_read_rate_limit: int = Field(default=60)   # general read endpoints
     api_ai_rate_limit: int = Field(default=30)     # AI-summary endpoints (stricter)

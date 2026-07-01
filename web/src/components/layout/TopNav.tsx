@@ -4,21 +4,29 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Search, BarChart2, ScanLine, Grid3x3 } from "lucide-react";
+import { Search, BarChart2, ScanLine, Grid3x3, Bookmark } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/stores/ui-store";
+import { useAuthStore } from "@/stores/auth";
 
 /* Nav items with icons — icon + label per ui-ux-pro-max nav rules */
-const NAV_ITEMS = [
+const NAV_ITEMS_PUBLIC = [
   { href: "/market",   label: "Market",   Icon: BarChart2 },
   { href: "/scanners", label: "Scanners", Icon: ScanLine  },
   { href: "/sectors",  label: "Sectors",  Icon: Grid3x3   },
 ] as const;
 
+const NAV_ITEM_WATCHLIST = { href: "/watchlist", label: "Watchlist", Icon: Bookmark } as const;
+
 export function TopNav() {
   const togglePalette = useUiStore((s) => s.toggleCommandPalette);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const pathname = usePathname();
   const [scrolled, setScrolled] = React.useState(false);
+
+  const navItems = isAuthenticated()
+    ? [...NAV_ITEMS_PUBLIC, NAV_ITEM_WATCHLIST]
+    : NAV_ITEMS_PUBLIC;
 
   /* Glassmorphism activates after 8px scroll */
   React.useEffect(() => {
@@ -83,7 +91,7 @@ export function TopNav() {
             className="hidden md:flex items-center gap-0.5 flex-1"
             aria-label="Main navigation"
           >
-            {NAV_ITEMS.map(({ href, label, Icon }) => {
+            {navItems.map(({ href, label, Icon }) => {
               /* Active if exact or starts-with for nested routes */
               const active = pathname === href || pathname.startsWith(href + "/");
               return (
@@ -136,7 +144,7 @@ export function TopNav() {
 
         {/* Mobile bottom border indicator for active route */}
         <div className="md:hidden flex items-center gap-0 overflow-x-auto border-t border-(--border-subtle) px-2 pb-1 pt-0.5">
-          {NAV_ITEMS.map(({ href, label, Icon }) => {
+          {navItems.map(({ href, label, Icon }) => {
             const active = pathname === href || pathname.startsWith(href + "/");
             return (
               <Link

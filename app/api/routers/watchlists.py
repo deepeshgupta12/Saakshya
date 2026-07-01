@@ -46,48 +46,53 @@ def _assert_owns(conn: Any, watchlist_id: str, user_id: str) -> None:
 
 
 def _hydrate_items(conn: Any, symbols: list[str], as_of: Any) -> list[dict[str, Any]]:
-    """Attach last_close / change_pct / scanner_tags from daily_ohlc + scanner_results."""
+    """Attach last_close / change_pct / scanner_tags from daily_ohlc + scanner_results.
+
+    daily_ohlc uses stock_id FK (no symbol column) and close_adj/close_raw — join via
+    stock_master. Alias must be 'ohlc', not 'do' (DuckDB reserved keyword, D-029).
+    """
     if not symbols:
         return []
     placeholders = ", ".join("?" * len(symbols))
-    # Latest price data.
-    date_filter = "AND o.session_date = ?" if as_of else ""
-    date_args   = [as_of] if as_of else []
+    date_args    = [as_of] if as_of else []
+    date_clause  = "AND ohlc.session_date = ?" if as_of else "AND ohlc.session_date = (SELECT max(session_date) FROM daily_ohlc)"
     rows = conn.execute(
         f"""
         SELECT
             sm.primary_symbol,
-            sm.company_name,
-            sm.sector,
-            o.close AS last_close,
-            ROUND(100.0 * (o.close - lag_close) / NULLIF(lag_close, 0), 2) AS change_pct
+            sm.name           AS company_name,
+            sec.name          AS sector,
+            ohlc.close_adj    AS last_close,
+            ROUND(100.0 * (ohlc.close_adj - lag_close) / NULLIF(lag_close, 0), 2) AS change_pct
         FROM stock_master sm
+        LEFT JOIN sector_master sec ON sec.sector_id = sm.sector_id
         LEFT JOIN (
             SELECT
-                symbol,
+                stock_id,
                 session_date,
-                close,
-                LAG(close) OVER (PARTITION BY symbol ORDER BY session_date) AS lag_close
+                close_adj,
+                LAG(close_adj) OVER (PARTITION BY stock_id ORDER BY session_date) AS lag_close
             FROM daily_ohlc
-        ) o ON o.symbol = sm.primary_symbol
-            {'AND o.session_date = ?' if as_of else 'AND o.session_date = (SELECT max(session_date) FROM daily_ohlc)'}
+        ) ohlc ON ohlc.stock_id = sm.stock_id
+            {date_clause}
         WHERE sm.primary_symbol IN ({placeholders})
         """,
         date_args + symbols,
     ).fetchall()
-    # Scanner tags (most recent session).
+    # Scanner tags via stock_id join (scanner_results uses stock_id not symbol).
     tag_rows = conn.execute(
         f"""
-        SELECT symbol, scanner, rank
-        FROM scanner_results
-        WHERE symbol IN ({placeholders})
-          AND session_date = (SELECT max(session_date) FROM scanner_results)
-        ORDER BY rank ASC
+        SELECT sm.primary_symbol, sr.scanner, sr.composite_score
+        FROM scanner_results sr
+        JOIN stock_master sm ON sm.stock_id = sr.stock_id
+        WHERE sm.primary_symbol IN ({placeholders})
+          AND sr.session_date = (SELECT max(session_date) FROM scanner_results)
+        ORDER BY sr.composite_score DESC
         """,
         symbols,
     ).fetchall()
     tags_by_symbol: dict[str, list[str]] = {}
-    for sym, scanner, _rank in tag_rows:
+    for sym, scanner, _score in tag_rows:
         tags_by_symbol.setdefault(sym, []).append(scanner)
 
     result = []

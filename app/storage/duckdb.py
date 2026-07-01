@@ -179,6 +179,64 @@ _M7_MIGRATIONS: list[str] = [
         created_at   TIMESTAMP DEFAULT now()
     )
     """,
+    # OAuth social identities — provider/subject → user mapping (M7 §5).
+    """
+    CREATE TABLE IF NOT EXISTS oauth_identities (
+        id          VARCHAR NOT NULL PRIMARY KEY,
+        user_id     VARCHAR NOT NULL,
+        provider    VARCHAR NOT NULL,
+        subject     VARCHAR NOT NULL,
+        email       VARCHAR,
+        created_at  TIMESTAMP DEFAULT now(),
+        UNIQUE (provider, subject)
+    )
+    """,
+]
+
+
+# M7 news pipeline: sources, normalized items, entity resolution + sentiment links (idempotent).
+_NEWS_MIGRATIONS: list[str] = [
+    """
+    CREATE TABLE IF NOT EXISTS news_sources (
+        source_id         VARCHAR NOT NULL PRIMARY KEY,
+        name              VARCHAR NOT NULL,
+        base_url          VARCHAR NOT NULL,
+        feed_url          VARCHAR NOT NULL,
+        feed_type         VARCHAR NOT NULL DEFAULT 'rss',
+        reliability       DOUBLE  NOT NULL DEFAULT 0.7,
+        redistribution_ok BOOLEAN NOT NULL DEFAULT FALSE,
+        active            BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at        TIMESTAMP DEFAULT now()
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS news_items (
+        article_id    VARCHAR NOT NULL PRIMARY KEY,
+        source_id     VARCHAR NOT NULL,
+        headline      VARCHAR NOT NULL,
+        body          VARCHAR,
+        url           VARCHAR NOT NULL,
+        published_at  TIMESTAMP,
+        ingested_at   TIMESTAMP DEFAULT now(),
+        cluster_id    VARCHAR,
+        as_of_version INTEGER NOT NULL DEFAULT 1
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS news_stock_links (
+        link_id               VARCHAR NOT NULL PRIMARY KEY,
+        article_id            VARCHAR NOT NULL,
+        symbol                VARCHAR NOT NULL,
+        link_confidence       DOUBLE  NOT NULL,
+        is_surfaced           BOOLEAN NOT NULL DEFAULT FALSE,
+        sentiment_label       VARCHAR,
+        sentiment_score       DOUBLE,
+        sentiment_model_ver   VARCHAR NOT NULL DEFAULT '0.1-heuristic',
+        impact_score          DOUBLE,
+        category              VARCHAR,
+        created_at            TIMESTAMP DEFAULT now()
+    )
+    """,
 ]
 
 
@@ -215,6 +273,8 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
     for migration in _M4_MIGRATIONS:
         conn.execute(migration)
     for migration in _M7_MIGRATIONS:
+        conn.execute(migration)
+    for migration in _NEWS_MIGRATIONS:
         conn.execute(migration)
 
 

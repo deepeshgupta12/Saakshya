@@ -11,12 +11,15 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from app.api.envelope import fail
 from app.api.errors import SaakshyaError, generic_error_handler, saakshya_error_handler
 from app.api.routers import market, scanners, sectors, stocks
 from app.api.routers import auth, watchlists, ai as ai_router
+from app.api.routers import news as news_router
 
 app = FastAPI(
     title="Saakshya API",
@@ -47,7 +50,15 @@ async def _attach_request_id(request: Request, call_next):  # type: ignore[no-un
     return response
 
 
-# Exception handlers — convert SaakshyaError + uncaught exceptions to envelope format.
+# Exception handlers — all errors return the standard envelope {data, meta, error}.
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    rid = request.state.request_id if hasattr(request.state, "request_id") else ""
+    body = fail(f"HTTP_{exc.status_code}", str(exc.detail), request_id=rid)
+    headers = getattr(exc, "headers", None) or {}
+    return JSONResponse(status_code=exc.status_code, content=body, headers=headers)
+
+
+app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
 app.add_exception_handler(SaakshyaError, saakshya_error_handler)  # type: ignore[arg-type]
 app.add_exception_handler(Exception, generic_error_handler)
 
@@ -59,6 +70,7 @@ app.include_router(stocks.router)
 app.include_router(auth.router)
 app.include_router(watchlists.router)
 app.include_router(ai_router.router)
+app.include_router(news_router.router)
 
 
 @app.get("/health", tags=["meta"])
