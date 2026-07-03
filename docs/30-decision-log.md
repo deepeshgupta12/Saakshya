@@ -364,6 +364,15 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** `web/app/page.tsx`, `web/src/components/marketing/{Landing,HeroCanvas}.tsx`, `web/src/components/layout/TopNav.tsx`, `web/package.json` (+three/@react-three); type-clean, production build green.
 - **Status:** Accepted (Phase 4)
 
+### D-061 — `(app)` auth-gated route group + client-side AuthGate; NotAdviceBanner coverage audit
+- **Date:** 2026-07-03
+- **Context:** portfolio / strategy / watchlist lived in the public `(market)` group; docs/06 §1 puts authenticated screens in `(app)`. Local-first auth is **client-side** (access token in-memory, refresh token in localStorage — no cookies), so the docs/06 "server-checked session" isn't possible yet.
+- **Alternatives considered:** Server-checked session (rejected for now — needs a cookie-session model, a later hardening); per-page guards only (rejected — duplicated, easy to forget); no gate (rejected — these are user-private surfaces).
+- **Final decision:** New `web/app/(app)/layout.tsx` (same TopNav/Footer chrome as `(market)`) wraps content in `AuthGate` (`web/src/components/auth/AuthGate.tsx`) — a client guard that `router.replace("/login")` when `!isAuthenticated()`, mirroring the existing WatchlistClient pattern. `portfolio`, `strategy`, `watchlist` moved via `git mv` from `(market)` → `(app)` (URLs unchanged: route groups don't affect the path). **NotAdviceBanner audit:** `strategy` and the scanner **directory** were the two gaps (0 not-advice mentions) — banner added; portfolio/watchlist already carried inline not-advice framing. 3D remains hero-only (docs/07). Also cleaned 4 junk literal-`\(...\)` scaffold dirs.
+- **Owner:** Frontend + Compliance
+- **Impact:** `web/app/(app)/*` (moved), `web/app/(market)/scanners/page.tsx`, `web/src/components/auth/AuthGate.tsx`; type-clean, build green. Server-side session gate tracked as future hardening (docs/23).
+- **Status:** Accepted (Phase 4b/5)
+
 ---
 
 ## 2. Decision index
@@ -430,6 +439,7 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-058 | 2026-07-02 | Zerodha Kite Connect is the sole market-data source; automated daily token flow via `http://127.0.0.1:8000/kite/callback`; yfinance/Bhavcopy removed | Data/Backend | `app/data/`, `docs/12`, SPEC §8 | Accepted (Phase 2) |
 | D-059 | 2026-07-02 | Polyglot persistence: TimescaleDB (time-series) + MongoDB (documents); DuckDB dropped; both run locally via docker-compose | Data/Backend | `app/storage/`, `docs/09`, `docs/11`, SPEC §9 | Accepted (Phase 3) |
 | D-060 | 2026-07-03 | Home/landing page at `/` with a subtle React-Three-Fiber 3D hero (reduced-motion → static gradient); login/signup surfaced in TopNav; 3D is hero-only per docs/07 | Frontend | `web/app/page.tsx`, `web/src/components/marketing/*`, `TopNav.tsx` | Accepted (Phase 4) |
+| D-061 | 2026-07-03 | `(app)` auth-gated route group + client-side `AuthGate`; moved portfolio/strategy/watchlist from `(market)`; NotAdviceBanner audit (strategy + scanner directory gaps fixed) | Frontend + Compliance | `web/app/(app)/*`, `web/src/components/auth/AuthGate.tsx` | Accepted (Phase 4b/5) |
 
 ---
 
