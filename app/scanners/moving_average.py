@@ -51,12 +51,15 @@ def _score_one(
     above_200 = close > sma200
     stacked = sma20 > sma50 > sma200
 
-    # MA trend raw score (docs/13 §4.4)
+    # MA trend raw score (docs/13 §4.4). Weights 40/30/20/10 sum to 100; scale() returns
+    # 0–100, so the slope term is scaled by 0.1 to contribute at most 10 points (matching
+    # the fractional-weight pattern in the rsi / volume-breakout scanners). Using 10.0×
+    # here blew the composite past 100 (e.g. neutral slope alone added 10×50 = 500).
     ma_trend_raw = (
         40.0 * (1.0 if above_50 else 0.0)
         + 30.0 * (1.0 if above_200 else 0.0)
         + 20.0 * (1.0 if stacked else 0.0)
-        + 10.0 * (scale(slope_50, -0.05, 0.05) if not is_neutral(slope_50) else 50.0)
+        + 0.1 * (scale(slope_50, -0.05, 0.05) if not is_neutral(slope_50) else 50.0)
     )
 
     # Signal tags
