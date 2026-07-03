@@ -9,7 +9,6 @@ Key contracts:
 
 from __future__ import annotations
 
-import duckdb
 import pytest
 
 from app.validation.analysis import ValidationMetrics
@@ -178,11 +177,9 @@ def test_verdict_details_populated() -> None:
 # apply_verdict_to_db
 # ---------------------------------------------------------------------------
 
-def _in_memory_db() -> duckdb.DuckDBPyConnection:
-    from app.storage.duckdb import init_schema
-    conn = duckdb.connect(":memory:")
-    init_schema(conn)
-    return conn
+def _in_memory_db():
+    from tests.dbutil import open_fresh_pg
+    return open_fresh_pg()
 
 
 def test_apply_validated_verdict_sets_db_flag() -> None:

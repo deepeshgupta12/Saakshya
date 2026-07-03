@@ -8,7 +8,7 @@ Compliance rules (SPEC §5.17, docs/21):
   - Output is shown to the user for confirmation as EDITABLE blocks — not auto-run.
   - Guardrail check enforced on any agent prose.
 
-Provider: premium model (claude-opus-4-8 or gemma4:12b depending on config).
+Provider: premium tier (Claude Sonnet — ai_model_premium).
 Audit: every NL→strategy attempt is logged.
 """
 

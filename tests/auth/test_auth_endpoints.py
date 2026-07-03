@@ -33,11 +33,11 @@ def test_register_happy_path(client, mem_db):
     assert "access_token" in data
     assert "refresh_token" in data
     assert data["plan"] == "free"
-    # Consent rows recorded
-    rows = mem_db.execute(
-        "SELECT consent_type FROM consents WHERE user_id = ? ORDER BY consent_type", [data["user_id"]]
-    ).fetchall()
-    assert [r[0] for r in rows] == ["ai_use", "not_advice"]
+    # Consent documents recorded (MongoDB)
+    consents = sorted(
+        c["consent_type"] for c in mem_db.consents.find({"user_id": data["user_id"]})
+    )
+    assert consents == ["ai_use", "not_advice"]
 
 
 def test_register_missing_consent_blocked(client):

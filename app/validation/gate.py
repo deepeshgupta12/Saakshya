@@ -15,7 +15,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-import duckdb
+import psycopg
 
 from app.validation.analysis import ValidationMetrics
 from app.validation.config import GateConfig, load_gate_config
@@ -120,7 +120,7 @@ def evaluate_gate(
 
 def apply_verdict_to_db(
     verdict: GateVerdict,
-    conn: duckdb.DuckDBPyConnection,
+    conn: psycopg.Connection,
     scanner_id: str = "momentum",
     weights_version: str = "weights-v1-hypothesis",
 ) -> None:
@@ -139,10 +139,10 @@ def apply_verdict_to_db(
     conn.execute(
         """
         INSERT INTO scanner_definitions (id, name, validated, version)
-        VALUES (?, ?, ?, 1)
+        VALUES (%s, %s, %s, 1)
         ON CONFLICT (id) DO UPDATE SET
             validated  = excluded.validated,
-            version    = version + 1
+            version    = scanner_definitions.version + 1
         """,
         [scanner_id, scanner_id, validated],
     )
@@ -151,9 +151,9 @@ def apply_verdict_to_db(
     conn.execute(
         """
         UPDATE scanner_results
-        SET    validation_status = ?
-        WHERE  scanner          = ?
-          AND  weights_version  = ?
+        SET    validation_status = %s
+        WHERE  scanner          = %s
+          AND  weights_version  = %s
         """,
         [verdict.status, scanner_id, weights_version],
     )

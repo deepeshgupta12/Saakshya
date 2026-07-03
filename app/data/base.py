@@ -99,27 +99,27 @@ class PublishGuardError(RuntimeError):
 def assert_publishable(source: DataSource) -> None:
     """Block commercial publishing of data from sources without redistribution rights.
 
-    yfinance and the un-reviewed NSE Bhavcopy stub are prototype-only (SPEC §8).
+    Kite Connect data is licensed for the authenticated user only; commercial
+    redistribution stays blocked until a redistribution licence is in force (SPEC §8).
     """
     if not source.supports(CAP_REDISTRIBUTION):
         raise PublishGuardError(
             f"Source '{source.name}' has no commercial redistribution rights; "
-            "prototype/local use only (SPEC §8)."
+            "personal/local use only (SPEC §8)."
         )
 
 
 def get_source(name: str | None = None) -> DataSource:
-    """Return the configured (or named) data source. Defaults to settings.active_data_source."""
+    """Return the configured (or named) data source. Defaults to settings.active_data_source.
+
+    Kite Connect is the sole supported source (D-058); yfinance/Bhavcopy were removed.
+    """
     # Imported lazily to keep the seam dependency-light and avoid import cycles.
     from app.config import get_settings
 
     resolved = name or get_settings().active_data_source
-    if resolved == "yfinance":
-        from app.data.yfinance_source import YFinanceSource
+    if resolved == "kite":
+        from app.data.kite_source import KiteSource
 
-        return YFinanceSource()
-    if resolved == "nse_bhavcopy":
-        from app.data.nse_bhavcopy_source import NseBhavcopSource
-
-        return NseBhavcopSource()
+        return KiteSource()
     raise ValueError(f"Unknown or not-yet-registered data source: {resolved!r}")

@@ -14,7 +14,7 @@ The full AI/LLM/agentic layer: orchestration, RAG, model abstraction, per-agent 
 4. **Guardrails enforced at output time, not just in the prompt.** The versioned blocked-phrase list runs on the generated text ([SPEC.md §3.3, §6.9](../SPEC.md), [compliance](21-compliance-risk-and-guardrails.md)).
 5. **Mode-A discipline.** No per-stock entry/target/stop, no "candidate" buy-leans, no ranked "what to buy" ([SPEC.md §3](../SPEC.md)).
 6. **Suppress, don't guess.** Missing critical inputs → the summary is suppressed, not fabricated ([SPEC.md §6.2](../SPEC.md)).
-7. **Provider abstraction + cost discipline.** Local-first MVP uses **Ollama** with **Gemma 4** (`gemma4:4b` cheap / `gemma4:12b` premium, requires Ollama ≥ 0.31) — zero cost, fully local (D-027, D-051). Cloud staging and production use **Claude Haiku** (`claude-haiku-4-5-20251001`) for repetitive summarization; a premium Claude model for complex synthesis ([SPEC.md §6.8, §9](../SPEC.md)). Provider is swapped via `SAAKSHYA_AI_PROVIDER` env var — no business-logic changes. Hard daily AI-call ceiling (configurable), regenerate-on-change cache, model tiering, latency budget.
+7. **Provider abstraction + cost discipline.** **Anthropic Claude is the sole provider** (D-057, supersedes D-027/D-051): **Claude Haiku** (`claude-haiku-4-5-20251001`) is the cheap default for repetitive summarization; **Claude Sonnet** (`claude-sonnet-4-6`) is the premium tier for complex synthesis ([SPEC.md §6.8, §9](../SPEC.md)). Ollama/Gemma was removed — it did not perform reliably on the M1. Requires `ANTHROPIC_API_KEY`. The `LLMProvider` Protocol is retained so tests can inject fakes and a future vendor can be added without touching business logic. Hard daily AI-call ceiling (configurable), regenerate-on-change cache, model tiering, latency budget.
 8. **SEBI AI-use disclosure (Mode B).** Under RA, AI use must be disclosed; the registered analyst remains responsible ([SPEC.md §6.7](../SPEC.md)).
 
 ---
@@ -97,17 +97,17 @@ A single `LLMProvider` interface decouples business logic from any vendor ([SPEC
 ```python
 class LLMProvider(Protocol):
     def complete(self, *, prompt_id: str, prompt_version: str,
-                 payload: dict, model_tier: str) -> LLMResult: ...
-    # model_tier: "cheap" -> OllamaProvider (local) or claude-haiku-4-5-20251001 (cloud)
-    #             "premium" -> OllamaProvider (same model locally) or premium Claude (cloud)
+                 system: str, payload_json: str, model_tier: str) -> LLMResult: ...
+    # model_tier: "cheap"   -> claude-haiku-4-5-20251001
+    #             "premium" -> claude-sonnet-4-6
 ```
 
-| Tier | Local-first (D-027, D-051) | Cloud staging / production | Use |
-|---|---|---|---|
-| **cheap (default)** | `gemma4:4b` via Ollama ≥ 0.31 (~3 GB, fast) | `claude-haiku-4-5-20251001` | Scanner explanations, per-stock summaries, repetitive daily passes |
-| **premium** | `gemma4:12b` via Ollama ≥ 0.31 (~8 GB) | Premium Claude model | Market brief synthesis, multi-signal reasoning, complex synthesis |
+| Tier | Model (D-057 — sole provider) | Use |
+|---|---|---|
+| **cheap (default)** | `claude-haiku-4-5-20251001` | Scanner explanations, per-stock summaries, repetitive daily passes |
+| **premium** | `claude-sonnet-4-6` | Market brief synthesis, multi-signal reasoning, complex synthesis |
 
-Switch via `SAAKSHYA_AI_PROVIDER=anthropic` (requires `ANTHROPIC_API_KEY`). No code changes needed. (D-027, D-051)
+Anthropic Claude is the **only** provider (D-057, supersedes D-027/D-051 which used Ollama/Gemma locally). Requires `ANTHROPIC_API_KEY`. Model ids are config-driven (`SAAKSHYA_AI_MODEL_CHEAP` / `SAAKSHYA_AI_MODEL_PREMIUM`), so a model bump is a config change, not a code change.
 
 **Cost / latency controls ([SPEC.md §6.8](../SPEC.md)):**
 - **Regenerate-on-change:** re-summarize a stock only when its signal category changes; otherwise serve cached.

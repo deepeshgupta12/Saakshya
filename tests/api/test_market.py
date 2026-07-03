@@ -36,26 +36,19 @@ def _seed_db(conn):
 
 
 @pytest.fixture
-def client():
-    import duckdb
-    conn = duckdb.connect(":memory:")
-    # Apply schema.
-    from app.storage.duckdb import init_schema
-    init_schema(conn)
-    _seed_db(conn)
+def client(pg):
+    _seed_db(pg)
 
     from app.api import deps
     from app.main import app
 
-    # Override DB dependency to use the seeded in-memory connection.
     def _override_db():
-        yield conn
+        yield pg
 
     app.dependency_overrides[deps.get_db] = _override_db
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
-    conn.close()
 
 
 def test_market_summary_shape(client) -> None:

@@ -9,10 +9,11 @@ from app.config import Settings
 
 def test_defaults() -> None:
     settings = Settings(_env_file=None)
-    assert settings.model_version == "gemma4:4b"  # D-051: Gemma 4 replaces qwen2.5 as Ollama default
-    assert settings.ai_ollama_model_cheap == "gemma4:4b"
-    assert settings.ai_ollama_model_premium == "gemma4:12b"
-    assert settings.active_data_source == "yfinance"
+    # D-057: Anthropic Claude is the sole provider; Ollama/Gemma removed.
+    assert settings.ai_provider == "anthropic"
+    assert settings.ai_model_cheap == "claude-haiku-4-5-20251001"
+    assert settings.ai_model_premium == "claude-sonnet-4-6"
+    assert settings.model_version == "claude-haiku-4-5-20251001"
     assert settings.history_period == "max"
 
 

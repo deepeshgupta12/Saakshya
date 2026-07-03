@@ -90,10 +90,10 @@ def update_link_sentiment(conn: Any, article_id: str, headline: str, body: str |
     conn.execute(
         """
         UPDATE news_stock_links
-           SET sentiment_label     = ?,
-               sentiment_score     = ?,
-               sentiment_model_ver = ?
-         WHERE article_id = ? AND is_surfaced = TRUE
+           SET sentiment_label     = %s,
+               sentiment_score     = %s,
+               sentiment_model_ver = %s
+         WHERE article_id = %s AND is_surfaced = TRUE
         """,
         [result["label"], result["score"], result["model_version"], article_id],
     )

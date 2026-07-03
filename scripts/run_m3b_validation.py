@@ -33,41 +33,38 @@ from app.validation.gate import GateVerdict, apply_verdict_to_db, evaluate_gate 
 
 _OUT_DIR = PROJECT_ROOT / "data" / "validation"
 _UNIVERSE_CSV = PROJECT_ROOT / "data" / "universe.csv"
-_NIFTY_SYMBOL = "^NSEI"
+_NIFTY_SYMBOL = "NIFTY 50"   # Kite index tradingsymbol on NSE
 _HORIZONS = (21, 63)
 
 
-def _fetch_prices(symbols: list[str], period: str = "5y") -> dict[str, pd.Series]:
-    """Fetch adjusted-close series via yfinance. Suffix .NS for NSE equities."""
-    import yfinance as yf
+def _close_series(rows: list, symbol: str) -> pd.Series:
+    """Build a date-indexed close series from a source's OHLCRows for one symbol."""
+    pairs = sorted((r.session_date, r.close_adj) for r in rows if r.symbol == symbol)
+    if not pairs:
+        return pd.Series(dtype=float)
+    idx = pd.DatetimeIndex([d for d, _ in pairs])
+    return pd.Series([c for _, c in pairs], index=idx).dropna()
 
-    tickers_yf = [f"{s}.NS" for s in symbols] + [_NIFTY_SYMBOL]
-    raw = yf.download(
-        tickers=tickers_yf,
-        period=period,
-        auto_adjust=True,
-        progress=False,
-        threads=True,
-    )
-    close = raw.get("Close", raw)
+
+def _fetch_prices(symbols: list[str], period: str = "5y") -> dict[str, pd.Series]:
+    """Fetch close series via the Kite data source (D-058)."""
+    from app.data.kite_source import KiteSource
+
+    rows = KiteSource().fetch_history(symbols, period=period)
     prices: dict[str, pd.Series] = {}
     for sym in symbols:
-        col = f"{sym}.NS"
-        if col in close.columns:
-            s = close[col].dropna()
-            if len(s) >= 200:
-                prices[sym] = s
+        s = _close_series(rows, sym)
+        if len(s) >= 200:
+            prices[sym] = s
     return prices
 
 
 def _fetch_nifty(period: str = "5y") -> pd.Series:
-    import yfinance as yf
+    """Fetch the Nifty 50 close series via the Kite data source (D-058)."""
+    from app.data.kite_source import KiteSource
 
-    raw = yf.download(_NIFTY_SYMBOL, period=period, auto_adjust=True, progress=False)
-    close = raw.get("Close", raw)
-    if hasattr(close, "squeeze"):
-        close = close.squeeze()
-    return close.dropna()
+    rows = KiteSource().fetch_history([_NIFTY_SYMBOL], period=period)
+    return _close_series(rows, _NIFTY_SYMBOL)
 
 
 def main(period: str = "5y", config_version: str = "v1") -> None:
@@ -83,13 +80,13 @@ def main(period: str = "5y", config_version: str = "v1") -> None:
     print(f"Universe: {len(symbols)} symbols")
 
     # --- fetch ---
-    print("Fetching price history via yfinance…")
+    print("Fetching price history via Kite Connect…")
     prices = _fetch_prices(symbols, period=period)
     nifty  = _fetch_nifty(period=period)
     print(f"Fetched: {len(prices)} stocks with ≥200 bars, Nifty {len(nifty)} bars")
 
     if not prices:
-        print("ERROR: no price data fetched — check network / yfinance")
+        print("ERROR: no price data fetched — check the Kite access token / network")
         sys.exit(1)
 
     # --- date range ---
@@ -190,7 +187,7 @@ def _print_metrics(m: ValidationMetrics) -> None:
 
 def _apply_to_db(verdict: GateVerdict) -> None:
     try:
-        from app.storage.duckdb import get_connection
+        from app.storage.postgres import get_connection
         with get_connection() as conn:
             apply_verdict_to_db(verdict, conn)
         print("DB updated: scanner_definitions.validated = TRUE")

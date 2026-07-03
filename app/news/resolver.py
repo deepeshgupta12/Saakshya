@@ -92,7 +92,7 @@ def resolve_and_store(conn: Any, article_id: str, headline: str, body: str | Non
 
         # Skip if link already exists for this article + symbol pair.
         exists = conn.execute(
-            "SELECT 1 FROM news_stock_links WHERE article_id = ? AND symbol = ?",
+            "SELECT 1 FROM news_stock_links WHERE article_id = %s AND symbol = %s",
             [article_id, sym],
         ).fetchone()
         if exists:
@@ -102,7 +102,7 @@ def resolve_and_store(conn: Any, article_id: str, headline: str, body: str | Non
             """
             INSERT OR IGNORE INTO news_stock_links
               (link_id, article_id, symbol, link_confidence, is_surfaced)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             [link_id, article_id, sym, confidence, is_surfaced],
         )

@@ -6,7 +6,7 @@ from datetime import date
 from pathlib import Path
 
 from app.data.universe import load_universe, seed_universe
-from app.storage.duckdb import get_connection
+from tests.dbutil import pg_cm as get_connection
 from app.storage.repository import Repository, StockMaster
 
 MEMORY = Path(":memory:")
@@ -36,12 +36,12 @@ def test_symbol_change_history_resolves_by_date() -> None:
         # Old ticker valid until 2023-06-30, new ticker from 2023-07-01 (same stock_id).
         conn.execute(
             "INSERT INTO exchange_symbols (stock_id, exchange, symbol, valid_from, valid_to) "
-            "VALUES (?, 'NSE', 'OLDCO.NS', DATE '1990-01-01', DATE '2023-06-30')",
+            "VALUES (%s, 'NSE', 'OLDCO.NS', DATE '1990-01-01', DATE '2023-06-30')",
             [sid],
         )
         conn.execute(
             "INSERT INTO exchange_symbols (stock_id, exchange, symbol, valid_from, valid_to) "
-            "VALUES (?, 'NSE', 'NEWCO.NS', DATE '2023-07-01', NULL)",
+            "VALUES (%s, 'NSE', 'NEWCO.NS', DATE '2023-07-01', NULL)",
             [sid],
         )
         assert repo.resolve_ticker("NSE", "OLDCO.NS", on=date(2023, 1, 1)) == sid

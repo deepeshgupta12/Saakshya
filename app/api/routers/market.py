@@ -33,7 +33,7 @@ def get_market_summary(
     # Aggregate scanner counts and breadth stats from scanner_results.
     rows = conn.execute(
         "SELECT scanner, count(*) as cnt, avg(composite_score) as avg_score "
-        "FROM scanner_results WHERE session_date = ? AND as_of_version = 1 "
+        "FROM scanner_results WHERE session_date = %s AND as_of_version = 1 "
         "GROUP BY scanner ORDER BY scanner",
         [as_of],
     ).fetchall()
@@ -88,7 +88,7 @@ def _ohlc_advance_decline(conn: Any, session_date: Any) -> tuple[int, int]:
             FROM daily_ohlc
             WHERE session_date = (
                 SELECT MAX(session_date) FROM daily_ohlc
-                WHERE session_date < ? AND as_of_version = 1
+                WHERE session_date < %s AND as_of_version = 1
             ) AND as_of_version = 1
         )
         SELECT
@@ -96,7 +96,7 @@ def _ohlc_advance_decline(conn: Any, session_date: Any) -> tuple[int, int]:
             SUM(CASE WHEN o.close_adj < p.prev_close THEN 1 ELSE 0 END)
         FROM daily_ohlc o
         JOIN prev p ON p.stock_id = o.stock_id
-        WHERE o.session_date = ? AND o.as_of_version = 1
+        WHERE o.session_date = %s AND o.as_of_version = 1
         """,
         [session_date, session_date],
     ).fetchone()

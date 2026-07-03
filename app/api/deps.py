@@ -12,26 +12,39 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from datetime import date
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
-import duckdb
+import psycopg
 from fastapi import Depends, Header, HTTPException, Query, status
 from jose import JWTError
 
 from app.auth.tokens import decode_access_token
-from app.storage.duckdb import get_connection
+from app.storage.postgres import get_connection
+
+if TYPE_CHECKING:
+    from pymongo.database import Database
 
 # ---------------------------------------------------------------------------
-# DuckDB session
+# Database sessions (polyglot, D-059): TimescaleDB analytics + MongoDB documents
 # ---------------------------------------------------------------------------
 
-def get_db() -> Generator[duckdb.DuckDBPyConnection, None, None]:
-    """Yield an open DuckDB connection; closes on request teardown."""
+def get_db() -> Generator[psycopg.Connection, None, None]:
+    """Yield an open TimescaleDB connection (analytics routers); closes on teardown."""
     with get_connection() as conn:
         yield conn
 
 
-DbDep = Annotated[duckdb.DuckDBPyConnection, Depends(get_db)]
+DbDep = Annotated[psycopg.Connection, Depends(get_db)]
+
+
+def get_mongo() -> "Database":
+    """Return the MongoDB database (user/app routers: portfolios, alerts, strategies…)."""
+    from app.storage.mongodb import get_db as _mongo_db  # noqa: PLC0415
+
+    return _mongo_db()
+
+
+MongoDep = Annotated["Database", Depends(get_mongo)]
 
 
 # ---------------------------------------------------------------------------

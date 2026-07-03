@@ -10,17 +10,12 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client_with_data():
-    import duckdb
-
+def client_with_data(pg):
     from app.api import deps
     from app.main import app
-    from app.storage.duckdb import init_schema
     from app.storage.repository import OhlcBar, Repository, StockMaster
 
-    conn = duckdb.connect(":memory:")
-    init_schema(conn)
-    repo = Repository(conn)
+    repo = Repository(pg)
     sid = repo.upsert_stock(StockMaster(primary_symbol="INFY", name="Infosys"))
     repo.upsert_ohlc([OhlcBar(
         stock_id=sid, session_date=date(2024, 1, 2),
@@ -39,14 +34,12 @@ def client_with_data():
         validation_status="VALIDATED", as_of_version=1, engine_version="1.0",
     )
 
-    def _override_db():
-        yield conn
-
-    app.dependency_overrides[deps.get_db] = _override_db
+    def _db_override():
+        yield pg
+    app.dependency_overrides[deps.get_db] = _db_override
     with TestClient(app) as c:
         yield c
     app.dependency_overrides.clear()
-    conn.close()
 
 
 def test_list_scanners_returns_all(client_with_data) -> None:

@@ -15,7 +15,7 @@ This document defines **every backend service**, how they depend on each other, 
 - **EOD/T+1 first** ([SPEC §8](../SPEC.md)). The system is batch-oriented; the pipeline runs in an overnight window and finishes before the morning brief. No intraday/real-time path in v1.
 - **Single `DataSource` adapter** ([SPEC §8](../SPEC.md)). yfinance (prototype) → NSE Bhavcopy CM-UDiFF + `sec_bhavdata` delivery (authoritative EOD) → TrueData/Global Datafeeds (production) sit behind one interface. No business service imports a vendor SDK directly.
 - **Correctness as workstreams** ([SPEC §6.1–6.2](../SPEC.md)). Corporate-action adjustment stores **raw + adjusted** and reconciles vs a 2nd source; all time-series carry **as-of / point-in-time versioning**; an **AI-generation audit log** records every generation.
-- **Two stacks** ([SPEC §9](../SPEC.md)). Production: FastAPI + Celery + Redis + PostgreSQL/TimescaleDB + ClickHouse + OpenSearch + pgvector + S3. Local-first: FastAPI + Uvicorn + DuckDB + plain scripts/Makefile, vectorized pandas/NumPy (no TA-Lib).
+- **Stack** ([SPEC §9](../SPEC.md), D-059). FastAPI + Uvicorn; **polyglot DB: TimescaleDB (analytics core) + MongoDB (user/app documents)** via `docker compose`; plain scripts/Makefile locally, Celery + Redis in production; vectorized pandas/NumPy (no TA-Lib). DuckDB was retired. ClickHouse/OpenSearch/pgvector/S3 remain later production concerns.
 
 Related docs: [10-api-contracts.md](./10-api-contracts.md) · [11-database-architecture.md](./11-database-architecture.md) · [12-data-ingestion-and-market-data.md](./12-data-ingestion-and-market-data.md) · [13-scanner-engine-and-scoring.md](./13-scanner-engine-and-scoring.md) · [14-ai-llm-agent-architecture.md](./14-ai-llm-agent-architecture.md) · [21-compliance-risk-and-guardrails.md](./21-compliance-risk-and-guardrails.md).
 
@@ -317,7 +317,7 @@ The gateway is the single front door; business services trust the identity/plan 
 | **Egress guardrail hook** | Route AI/natural-language responses through `compliance-guardrail` before returning ([SPEC §6.9](../SPEC.md)). |
 | **Envelope + `as_of`** | Ensure the standard response envelope (`data`, `meta`, `error`, `as_of`, `data_confidence`) is present. |
 
-**Local-first simplification ([SPEC §9](../SPEC.md), [§12](../SPEC.md)):** no separate gateway process. FastAPI dependencies handle auth (or a stub), simple in-process rate counters, and the guardrail check runs as a response dependency. Plan-gating is a no-op or single-user. Caching is the `ai_summaries` table + a small in-memory/DuckDB cache.
+**Local-first simplification ([SPEC §9](../SPEC.md), [§12](../SPEC.md)):** no separate gateway process. FastAPI dependencies handle auth (or a stub), simple in-process rate counters, and the guardrail check runs as a response dependency. Plan-gating is a no-op or single-user. Caching is the `ai_summary_cache` table (TimescaleDB) + a small in-memory cache.
 
 ---
 
@@ -391,8 +391,8 @@ The full chain must complete before the morning brief. Detailed timing table liv
 |---|---|
 | API gateway process | FastAPI dependencies (auth stub, in-proc rate counters, guardrail dependency) |
 | Celery + Redis orchestration | `scripts/run_pipeline.py` sequential stages + Makefile |
-| PostgreSQL + TimescaleDB + ClickHouse | single-file **DuckDB** |
-| OpenSearch search | DuckDB filter / simple `LIKE`; defer real search |
+| PostgreSQL + TimescaleDB + ClickHouse | **TimescaleDB + MongoDB** via `docker compose` (D-059); DuckDB retired |
+| OpenSearch search | Postgres filter / simple `LIKE`; defer real search |
 | pgvector / Qdrant | deferred (or in-memory) until AI RAG needed |
 | S3 object storage | local `data/` directory |
 | Provider abstraction → premium model | Claude **Haiku** (`claude-haiku-4-5-20251001`) via env var |

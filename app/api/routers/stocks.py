@@ -111,7 +111,7 @@ def get_stock_ai_summary(
         "sr.signal_tags, sr.risk_flags, sr.data_confidence "
         "FROM scanner_results sr "
         "JOIN stock_master sm ON sm.stock_id = sr.stock_id "
-        "WHERE sm.primary_symbol = ? AND sr.session_date = ? AND sr.as_of_version = 1 "
+        "WHERE sm.primary_symbol = %s AND sr.session_date = %s AND sr.as_of_version = 1 "
         "ORDER BY sr.composite_score DESC NULLS LAST LIMIT 1",
         [sym, session_date],
     ).fetchone()

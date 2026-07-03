@@ -12,7 +12,7 @@
 - **Raw + adjusted both stored** for prices ([SPEC §6.1](../SPEC.md)); corporate-action adjustment is a first-class workstream with a dedicated `corporate_actions` master and reconciliation flags.
 - **AI-generation audit log is a first-class entity** ([SPEC §6.6](../SPEC.md), [§9](../SPEC.md)).
 - **Survivorship control:** delisted/merged instruments are retained, never deleted ([SPEC §6.3](../SPEC.md)).
-- **Two stacks** ([SPEC §9](../SPEC.md)): production uses PostgreSQL + TimescaleDB + ClickHouse + OpenSearch + pgvector + Redis + S3; local-first collapses all of it into a single **DuckDB** file. SQL below is Postgres/Timescale flavored; DuckDB equivalents noted where they differ.
+- **Polyglot persistence** ([SPEC §9](../SPEC.md), D-059): **TimescaleDB (Postgres)** holds the analytics core (OHLC/indicators/scanners/AI/news — all JOINed + as-of-versioned; time-series tables are hypertables); **MongoDB** holds user/app documents (users, portfolios, transactions, alerts, strategies, watchlists, auth). Both run locally via `docker compose up -d`. **DuckDB was retired (D-059).** Live DDL: `app/storage/schema_postgres.sql`; Mongo collections/indexes: `app/storage/mongo_setup.py`. ClickHouse/OpenSearch/pgvector/Redis/S3 remain later concerns. SQL below is Postgres/Timescale flavored.
 
 Related: [09-backend-architecture.md](./09-backend-architecture.md) · [12-data-ingestion-and-market-data.md](./12-data-ingestion-and-market-data.md) · [13-scanner-engine-and-scoring.md](./13-scanner-engine-and-scoring.md) · [14-ai-llm-agent-architecture.md](./14-ai-llm-agent-architecture.md).
 
@@ -30,7 +30,7 @@ Related: [09-backend-architecture.md](./09-backend-architecture.md) · [12-data-
 | **pgvector / Qdrant** | Embeddings for AI RAG / similarity | Vector search co-located (pgvector) or dedicated (Qdrant) |
 | **S3** | Raw landed feeds, processed parquet, backups, exports | Cheap durable object storage; immutable raw for reproducibility |
 
-**Local-first:** one DuckDB file replaces PG/Timescale/ClickHouse; OpenSearch → `LIKE`/filters; pgvector/Qdrant deferred; Redis deferred (in-proc cache); S3 → local `data/` ([SPEC §9](../SPEC.md), [§12](../SPEC.md)).
+**Local-first (D-059):** TimescaleDB + MongoDB via `docker compose`; ClickHouse folded into Timescale for now; OpenSearch → `LIKE`/filters; pgvector/Qdrant deferred; Redis deferred (in-proc cache); S3 → local `data/` ([SPEC §9](../SPEC.md), [§12](../SPEC.md)).
 
 ---
 
@@ -442,7 +442,7 @@ erDiagram
 - **TimescaleDB hypertables** — `daily_ohlc`, `index_ohlc`, `technical_indicators` chunked by `session_date`, **1-month chunks**. Enable **native compression** on chunks older than ~90 days (segment by `stock_id`, order by `session_date`). This keeps recent reads hot and old data compact.
 - **ClickHouse** — `backtest_trades`, `usage_events` partitioned by month (`toYYYYMM`), ordered by `(stock_id, session_date)` / `(user_id, created_at)`.
 - **Postgres core tables** — generally unpartitioned; `scanner_results` and `alert_events` may be range-partitioned by `session_date` if volume warrants.
-- **DuckDB (local)** — single file, no partitioning; date-filtered queries over the full table.
+- **TimescaleDB (local + prod, D-059)** — `daily_ohlc`/`index_ohlc`/`technical_indicators` are hypertables partitioned on `session_date`; date-filtered queries prune chunks automatically.
 
 ---
 
@@ -470,6 +470,6 @@ erDiagram
 - **As-of preservation:** schema changes to time-series add columns/versions; **never rewrite historical rows in place** — bump `as_of_version` instead. Restatements are new versions, preserving point-in-time history ([SPEC §6.2](../SPEC.md)).
 - **Backfill discipline:** data backfills run as explicit jobs, logged in `data_quality_logs`, and re-emit dependent indicators/scanners/AI summaries ([SPEC §6.2](../SPEC.md)).
 - **Timescale specifics:** hypertable creation and compression policies are migration steps; chunk interval changes apply to new chunks only.
-- **Local-first:** DuckDB schema lives in `app/storage/schema.sql`; migrations are forward-only `ALTER`/versioned scripts mirroring the Alembic intent so modules lift into production cleanly ([SPEC §12](../SPEC.md)).
+- **Local-first (D-059):** TimescaleDB schema lives in `app/storage/schema_postgres.sql` (idempotent `CREATE ... IF NOT EXISTS` + `create_hypertable`); MongoDB collections/indexes in `app/storage/mongo_setup.py`. The same schema serves local and production ([SPEC §12](../SPEC.md)).
 
 **Acceptance:** every time-series table carries `as_of_version`; no migration deletes delisted instruments or rewrites historical OHLC; a restated split re-versions affected rows and re-emits dependents; any displayed value is reproducible for its `as_of`.

@@ -58,7 +58,7 @@ def list_scanners(
     if as_of is not None:
         rows = conn.execute(
             "SELECT scanner, count(*) FROM scanner_results "
-            "WHERE session_date = ? AND as_of_version = 1 GROUP BY scanner",
+            "WHERE session_date = %s AND as_of_version = 1 GROUP BY scanner",
             [as_of],
         ).fetchall()
         counts = {str(r[0]): int(r[1]) for r in rows}
@@ -111,7 +111,7 @@ def get_scanner_results(
     symbols = [r["symbol"] for r in rows] if rows else []
     enrichment: dict[str, dict[str, Any]] = {}
     if symbols:
-        placeholders = ", ".join("?" * len(symbols))
+        placeholders = ", ".join(["%s"] * len(symbols))
         rich_rows = conn.execute(
             f"""
             SELECT
@@ -123,14 +123,14 @@ def get_scanner_results(
             FROM stock_master sm
             LEFT JOIN sector_master sec ON sec.sector_id = sm.sector_id
             LEFT JOIN daily_ohlc o  ON o.stock_id  = sm.stock_id
-                                   AND o.session_date = ?
+                                   AND o.session_date = %s
                                    AND o.as_of_version = 1
             LEFT JOIN daily_ohlc o2 ON o2.stock_id = sm.stock_id
                                    AND o2.session_date = (
                                        SELECT MAX(session_date)
                                        FROM daily_ohlc
                                        WHERE stock_id = sm.stock_id
-                                         AND session_date < ?
+                                         AND session_date < %s
                                          AND as_of_version = 1
                                    )
                                    AND o2.as_of_version = 1

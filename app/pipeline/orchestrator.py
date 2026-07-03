@@ -14,10 +14,11 @@ from __future__ import annotations
 import json
 import logging
 import time
+from contextlib import ExitStack
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
-import duckdb
+import psycopg
 
 from app.pipeline.ingest import run_ingest
 from app.scanners.momentum import run_momentum_scanner
@@ -25,7 +26,7 @@ from app.scanners.moving_average import run_ma_scanner
 from app.scanners.rsi import run_rsi_scanner
 from app.scanners.schema import ScannerResult
 from app.scanners.volume_breakout import run_volume_breakout_scanner
-from app.storage.duckdb import get_connection
+from app.storage.postgres import get_connection
 from app.storage.repository import Repository
 
 log = logging.getLogger(__name__)
@@ -71,7 +72,7 @@ def run(
     period: str | None = None,
     stages: list[str] | None = None,
     as_of_version: int = _AS_OF_VERSION,
-    conn: duckdb.DuckDBPyConnection | None = None,
+    conn: psycopg.Connection | None = None,
 ) -> PipelineResult:
     """Run the full EOD pipeline or a subset of stages.
 
@@ -87,9 +88,11 @@ def run(
     result = PipelineResult(run_id=run_id, as_of_version=as_of_version, session_date=None)
     wall_start = time.monotonic()
 
-    _conn_owner = conn is None
+    # Use ExitStack so the context manager object is kept alive for the full run.
+    # get_connection().__enter__() without storing the manager causes immediate GC-close.
+    _stack = ExitStack()
     if conn is None:
-        conn = get_connection().__enter__()
+        conn = _stack.enter_context(get_connection())
 
     try:
         repo = Repository(conn)
@@ -98,7 +101,9 @@ def run(
         if "ingest" in active_stages:
             t0 = time.monotonic()
             log.info("[pipeline] stage=ingest starting")
-            ingest_summary = run_ingest(limit=limit, period=period)
+            # Pass the same connection so ingest doesn't open a second write-conn
+            # to the same DuckDB file (only one writer allowed at a time).
+            ingest_summary = run_ingest(limit=limit, period=period, conn=conn)
             elapsed = time.monotonic() - t0
             result.stages.append(StageResult(
                 stage="ingest",
@@ -176,8 +181,7 @@ def run(
             )
 
     finally:
-        if _conn_owner:
-            conn.close()
+        _stack.close()  # closes the connection only if we opened it
 
     result.total_duration_s = round(time.monotonic() - wall_start, 2)
     log.info("[pipeline] run_id=%s total=%.1fs", run_id, result.total_duration_s)
@@ -212,7 +216,7 @@ def _persist_scanner_results(repo: Repository, results: list[ScannerResult]) -> 
 
 def _run_explain_stage(
     repo: Repository,
-    conn: duckdb.DuckDBPyConnection,
+    conn: psycopg.Connection,
     session_date: date,
     as_of_version: int,
     run_id: str,
@@ -229,7 +233,7 @@ def _run_explain_stage(
         "sr.sub_scores, sr.facts, sr.signal_tags, sr.risk_flags, sr.data_confidence "
         "FROM scanner_results sr "
         "JOIN stock_master sm ON sm.stock_id = sr.stock_id "
-        "WHERE sr.session_date = ? AND sr.as_of_version = ?",
+        "WHERE sr.session_date = %s AND sr.as_of_version = %s",
         [session_date, as_of_version],
     ).fetchall()
 

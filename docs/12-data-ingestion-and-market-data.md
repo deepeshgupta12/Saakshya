@@ -9,9 +9,9 @@
 ## 0. Principles
 
 - **EOD-first (T+1)** ([SPEC §8](../SPEC.md)): ingest the previous session after close → normalize → corp-action adjust → indicators + sector scores → scanners → news → AI summaries → morning brief. No intraday/live path in v1; live data is a later, separately-licensed tier (WebSocket).
-- **One `DataSource` adapter** ([SPEC §8](../SPEC.md)): business logic never depends on the vendor. yfinance (prototype) → NSE Bhavcopy + delivery (authoritative EOD) → TrueData/Global Datafeeds (production) all drop in behind the same interface.
-- **Corporate-action adjustment is a first-class workstream** ([SPEC §6.1](../SPEC.md)): store **raw + adjusted**, reconcile vs a 2nd source. yfinance auto-adjustment is a prototyping convenience, **not** the production engine.
-- **Licensing reality** ([SPEC §8](../SPEC.md)): free/unofficial sources are **prototype-only**; a commercial product that redistributes NSE/BSE data needs a licensed vendor with explicit commercial redistribution rights. Historical adjusted depth (incl. delisted names) is a separate procurement and a gating dependency for scanners/backtesting.
+- **One `DataSource` adapter** ([SPEC §8](../SPEC.md)): business logic never depends on the vendor. **Zerodha Kite Connect is the sole source** (D-058); the adapter seam is kept so a future vendor drops in behind the same interface.
+- **Corporate-action adjustment is a first-class workstream** ([SPEC §6.1](../SPEC.md)): store **raw + adjusted**, reconcile vs a 2nd source. Kite provides **no corp-action feed**, so series are currently stored unadjusted — a documented gap (§3.4), never a silent mis-adjustment.
+- **Licensing reality** ([SPEC §8](../SPEC.md)): Kite data is licensed for the authenticated user; commercial redistribution stays blocked (`supports("redistribution") == False`) until a redistribution licence is in force. Historical adjusted depth (incl. delisted names) remains a separate procurement and a gating dependency for scanners/backtesting.
 - **As-of versioning + user-visible data-confidence** ([SPEC §6.2](../SPEC.md)) flow through every stage.
 
 Related: [09-backend-architecture.md](./09-backend-architecture.md) · [11-database-architecture.md](./11-database-architecture.md) · [13-scanner-engine-and-scoring.md](./13-scanner-engine-and-scoring.md).
@@ -63,32 +63,45 @@ flowchart TD
 
 ---
 
-## 3. Layered sources (behind one `DataSource` adapter)
+## 3. Data source: Zerodha Kite Connect (behind one `DataSource` adapter)
 
-Direct from [SPEC §8](../SPEC.md). Business logic (scanners, indicators, AI) depends only on the adapter interface; swapping the source touches no business code.
+**Kite Connect is the sole EOD source (D-058, [SPEC §8](../SPEC.md)).** yfinance, NSE Bhavcopy and the TrueData/Global-Datafeeds layering were removed. The adapter seam is retained so business logic (scanners, indicators, AI) still depends only on the interface — a future vendor drops in without touching business code.
 
 | Source | Provides | Use-stage | Caveat |
 |---|---|---|---|
-| **yfinance (Yahoo)** | Adjusted OHLCV for `.NS`/`.BO`; auto split/dividend adjustment | **Prototype / local** | Not a licensed feed; **no delivery %**. Prototype only ([SPEC §8](../SPEC.md)). Auto-adjustment ≠ production engine ([SPEC §6.1](../SPEC.md)). |
-| **NSE Bhavcopy (CM-UDiFF)** | Official daily EOD OHLCV + volume, all listed equities | **Authoritative EOD** | Redistribution review required; download needs correct headers/cookies. |
-| **NSE `sec_bhavdata`** | Delivery quantity / delivery % (volume-breakout scanner input) | **Authoritative EOD** | Same review; pair with bhavcopy by date. |
-| Alpha Vantage / Twelve Data / Marketstack | Free-tier EOD APIs (keys) | **Prototype fallback** | Tight rate caps; verify India coverage symbol-by-symbol. |
-| **TrueData / Global Datafeeds** | Licensed EOD (+live), redistribution rights, corp-action adjustment, symbol mapping | **Production** | Paid; procurement lead time. Drops in behind the same adapter. |
+| **Zerodha Kite Connect** | Daily OHLCV via `historical_data`; NSE/BSE instrument master | **Sole source (local + production)** | Paid API (~₹500/mo). Candles are **unadjusted** (no split/bonus adjustment). **No delivery %** and **no corporate-action API**. Daily `access_token` (expires ~07:30 IST). Licensed for the authenticated user — `supports("redistribution") == False` until a redistribution licence is in force. |
 
-**Starting config ([SPEC §8](../SPEC.md)):** primary **yfinance** (prototype); authoritative supplement **NSE Bhavcopy + delivery file**; production **licensed vendor** swapped behind the adapter without touching scanners, indicators, or AI.
+**Config:** `SAAKSHYA_ACTIVE_DATA_SOURCE=kite`; credentials `KITE_API_KEY`/`KITE_API_SECRET` and the daily `KITE_ACCESS_TOKEN` come from `.env`. Token acquisition + refresh: `app/data/kite_auth.py` (see §3.3). The adapter is `app/data/kite_source.py`.
 
-### 3.1 Adapter interface (illustrative)
+### 3.1 Adapter interface (`app/data/base.py`)
 
 ```python
 class DataSource(Protocol):
     name: str
-    def fetch_eod(self, symbols: list[str], session_date: date) -> list[OHLCRow]: ...
-    def fetch_delivery(self, session_date: date) -> list[DeliveryRow]: ...   # bhavdata; None for yfinance
-    def fetch_corporate_actions(self, since: date) -> list[CorpAction]: ...
+    def fetch_history(self, symbols: Iterable[str], period: str) -> list[OHLCRow]: ...
+    def fetch_eod(self, symbols: Iterable[str], session_date: date) -> list[OHLCRow]: ...
+    def fetch_delivery(self, session_date: date) -> list[DeliveryRow] | None: ...  # None for Kite
+    def fetch_corporate_actions(self, symbols, since: date) -> list[CorpActionRow]: ...  # [] for Kite
     def supports(self, capability: str) -> bool: ...   # "delivery_pct", "adjusted", "redistribution"
 ```
 
-Free/unofficial adapters return `supports("redistribution") == False`; the platform refuses to publish commercially from a non-redistributable source ([SPEC §8](../SPEC.md)).
+`KiteSource` declares `adjusted=False`, `delivery_pct=False`, `redistribution=False`; `assert_publishable()` refuses commercial publishing from a non-redistributable source ([SPEC §8](../SPEC.md)). `KiteSource` normalizes seam symbols (`RELIANCE`, `RELIANCE.NS`, `NSE:RELIANCE`) to the Kite tradingsymbol and resolves the `instrument_token` from the instrument master, throttling to Kite's ~3 req/s historical limit.
+
+### 3.3 Daily token flow (`app/data/kite_auth.py`, D-058)
+
+The `access_token` expires each morning and is re-acquired unattended, tried in order:
+1. **Automated TOTP login (primary):** scripts the Kite web login (`KITE_USER_ID` + `KITE_PASSWORD` + a `pyotp`-generated TOTP from `KITE_TOTP_SECRET`) to get a `request_token` with zero interaction, then `generate_session()` → `access_token`. Suits the overnight cron.
+2. **Browser callback (fallback):** opens the Kite login URL and captures the `request_token` on the registered redirect `http://127.0.0.1:8000/kite/callback` via a tiny local HTTP server. Used when Zerodha forces a manual re-auth.
+
+The token is written back to `.env` (`KITE_ACCESS_TOKEN`) so same-day runs reuse it. Secrets are read from settings only, never logged.
+
+**Corporate TLS-inspection proxies (e.g. Sophos / Zscaler).** If the network re-signs Kite's certificate with a private CA, `requests`/`httpx` will fail cert verification (`CERTIFICATE_VERIFY_FAILED`). The fix is **not** to disable verification — export the proxy's CA cert (Keychain Access → the interception CA → export as PEM), append it to a bundle, and set `KITE_CA_BUNDLE` to that path. Both the kiteconnect and kite_auth HTTP clients honour it. Alternatively, run the pipeline from a network without TLS inspection, or have IT whitelist `kite.trade`/`kite.zerodha.com` from inspection.
+
+### 3.4 Known gaps (Kite-only, documented — never silently mis-handled)
+
+- **No corporate-action feed.** Kite Connect exposes no CA API, so `fetch_corporate_actions` returns `[]` and series are stored **unadjusted** (`is_adjusted=False`). The M1 corp-action adjuster runs but has nothing to apply until a dedicated CA feed is added. Splits/bonuses will therefore show as raw discontinuities — a **tracked gap**, surfaced via `data_quality_logs`, not hidden.
+- **No delivery %.** `fetch_delivery` returns `None`; downstream marks delivery-based signals neutral, not zero.
+- **Reconciliation is a no-op** while the source is unadjusted (the second-source comparison compares equal values); it re-activates when a corp-action feed lands.
 
 ### 3.2 Future live data
 Licensed **live/real-time** data arrives via **WebSocket** in a later phase (Phase 5, [SPEC §4](../SPEC.md), [§10](../SPEC.md)), separately licensed and Mode-A-safe in content but gated on data licensing. It lands behind the same adapter with a streaming capability flag.

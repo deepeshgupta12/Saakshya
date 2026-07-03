@@ -69,7 +69,7 @@ def stock_news(
 
     # Validate symbol exists.
     row = conn.execute(
-        "SELECT primary_symbol FROM stock_master WHERE primary_symbol = ?", [sym]
+        "SELECT primary_symbol FROM stock_master WHERE primary_symbol = %s", [sym]
     ).fetchone()
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Symbol {sym!r} not found.")
@@ -78,7 +78,7 @@ def stock_news(
     if user.plan == "free":
         return ok([], data_confidence="none")
 
-    date_clause = "AND ni.published_at::DATE = ?" if as_of else ""
+    date_clause = "AND ni.published_at::DATE = %s" if as_of else ""
     date_args   = [as_of] if as_of else []
 
     rows = conn.execute(
@@ -92,11 +92,11 @@ def stock_news(
         FROM news_stock_links nsl
         JOIN news_items   ni ON ni.article_id = nsl.article_id
         JOIN news_sources ns ON ns.source_id  = ni.source_id
-        WHERE nsl.symbol      = ?
+        WHERE nsl.symbol      = %s
           AND nsl.is_surfaced = TRUE
           {date_clause}
         ORDER BY ni.published_at DESC NULLS LAST
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
         """,
         [sym] + date_args + [limit, offset],
     ).fetchall()
@@ -105,7 +105,7 @@ def stock_news(
         f"""
         SELECT COUNT(*) FROM news_stock_links nsl
         JOIN news_items ni ON ni.article_id = nsl.article_id
-        WHERE nsl.symbol = ? AND nsl.is_surfaced = TRUE {date_clause}
+        WHERE nsl.symbol = %s AND nsl.is_surfaced = TRUE {date_clause}
         """,
         [sym] + date_args,
     ).fetchone()[0]
@@ -129,7 +129,7 @@ def market_news(
     if user.plan == "free":
         return ok([], data_confidence="none")
 
-    date_clause = "AND ni.published_at::DATE = ?" if as_of else ""
+    date_clause = "AND ni.published_at::DATE = %s" if as_of else ""
     date_args   = [as_of] if as_of else []
 
     rows = conn.execute(
@@ -146,7 +146,7 @@ def market_news(
         WHERE nsl.is_surfaced = TRUE
           {date_clause}
         ORDER BY ni.published_at DESC NULLS LAST
-        LIMIT ? OFFSET ?
+        LIMIT %s OFFSET %s
         """,
         date_args + [limit, offset],
     ).fetchall()

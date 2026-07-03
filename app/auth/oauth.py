@@ -70,60 +70,55 @@ def validate_google_id_token(id_token: str, client_id: str) -> dict[str, Any]:
 
 
 def get_or_create_google_user(
-    conn: Any,
+    mongo: Any,
     claims: dict[str, Any],
 ) -> tuple[str, str]:
-    """Map Google claims → (user_id, plan).
+    """Map Google claims → (user_id, plan) using MongoDB (D-059).
 
-    Creates user + consent rows on first login for that Google account.
+    Creates user + consent docs on first login for that Google account.
     """
+    from datetime import datetime, timezone  # noqa: PLC0415
+
     provider = "google"
     subject  = claims["sub"]
     email    = claims.get("email", "").lower() or None
+    now      = datetime.now(tz=timezone.utc)
 
-    # 1. Existing oauth_identities row → return linked user.
-    row = conn.execute(
-        "SELECT user_id FROM oauth_identities WHERE provider = ? AND subject = ?",
-        [provider, subject],
-    ).fetchone()
-    if row:
-        user_row = conn.execute(
-            "SELECT user_id, plan FROM users WHERE user_id = ?", [row[0]]
-        ).fetchone()
-        if user_row:
-            return str(user_row[0]), str(user_row[1])
+    # 1. Existing oauth_identities doc → return linked user.
+    ident = mongo.oauth_identities.find_one({"provider": provider, "subject": subject}, {"user_id": 1})
+    if ident:
+        user = mongo.users.find_one({"user_id": ident["user_id"]}, {"user_id": 1, "plan": 1})
+        if user:
+            return str(user["user_id"]), str(user.get("plan", "free"))
 
     # 2. Existing user by email → link the identity.
-    user_row = None
-    if email:
-        user_row = conn.execute(
-            "SELECT user_id, plan FROM users WHERE email = ?", [email]
-        ).fetchone()
+    user = mongo.users.find_one({"email": email}, {"user_id": 1, "plan": 1}) if email else None
 
-    if user_row:
-        user_id = str(user_row[0])
-        plan    = str(user_row[1])
+    if user:
+        user_id = str(user["user_id"])
+        plan    = str(user.get("plan", "free"))
     else:
         # 3. New user: create account + auto-consent (Google OIDC = implicit consent).
         user_id      = str(uuid.uuid4())
         display_name = claims.get("name") or (email.split("@")[0] if email else "User")
         plan         = "free"
-        conn.execute(
-            "INSERT INTO users (user_id, email, display_name, plan) VALUES (?, ?, ?, ?)",
-            [user_id, email, display_name, plan],
-        )
-        for consent_type in ("not_advice", "ai_use"):
-            conn.execute(
-                "INSERT INTO consents (consent_id, user_id, consent_type) VALUES (?, ?, ?)",
-                [str(uuid.uuid4()), user_id, consent_type],
-            )
+        mongo.users.insert_one({
+            "user_id": user_id, "email": email, "display_name": display_name,
+            "plan": plan, "created_at": now, "updated_at": now,
+        })
+        mongo.consents.insert_many([
+            {"consent_id": str(uuid.uuid4()), "user_id": user_id,
+             "consent_type": ctype, "granted_at": now}
+            for ctype in ("not_advice", "ai_use")
+        ])
 
-    # 4. Insert oauth_identities row (idempotent — UNIQUE constraint guards re-insert).
-    conn.execute(
-        """
-        INSERT OR IGNORE INTO oauth_identities (id, user_id, provider, subject, email)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        [str(uuid.uuid4()), user_id, provider, subject, email],
+    # 4. Upsert oauth_identities doc (idempotent — unique (provider, subject) index).
+    mongo.oauth_identities.update_one(
+        {"provider": provider, "subject": subject},
+        {"$setOnInsert": {
+            "id": str(uuid.uuid4()), "user_id": user_id,
+            "provider": provider, "subject": subject, "email": email, "created_at": now,
+        }},
+        upsert=True,
     )
     return user_id, plan

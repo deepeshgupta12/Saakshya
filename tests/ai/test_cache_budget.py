@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import duckdb
 import pytest
 
 from app.ai.budget import allow_call, current_count, increment_calls
 from app.ai.cache import get_cached, put_cached, signal_category
 from app.ai.payload import ComputedBlock, DataConfidence, Payload, Subject
-from app.storage.duckdb import init_schema
+from tests.dbutil import open_fresh_pg
 
 
-def _db() -> duckdb.DuckDBPyConnection:
-    conn = duckdb.connect(":memory:")
-    init_schema(conn)
-    return conn
+def _db():
+    return open_fresh_pg()
 
 
 def _make_payload(
@@ -125,7 +122,7 @@ class TestBudget:
             __import__("datetime").timezone.utc
         ).date().isoformat()
         conn.execute(
-            "INSERT INTO ai_daily_calls (call_date, call_count) VALUES (?, 1001)",
+            "INSERT INTO ai_daily_calls (call_date, call_count) VALUES (%s, 1001)",
             [today],
         )
 

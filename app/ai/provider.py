@@ -1,18 +1,15 @@
-"""LLM provider abstraction (docs/14 §3, SPEC §9, D-027, D-051).
+"""LLM provider abstraction (docs/14 §3, SPEC §9; D-057 supersedes D-027/D-051).
 
-Default: OllamaProvider using Gemma 4 (gemma4:4b cheap / gemma4:12b premium)
-via the local Ollama server (requires Ollama ≥ 0.31).
-Alternative: AnthropicProvider (Claude Haiku / premium) — requires ANTHROPIC_API_KEY.
-
-Swapping providers touches no business logic; only get_default_provider() changes.
+Sole provider: AnthropicProvider (Claude Haiku cheap / Claude Sonnet premium) —
+requires ANTHROPIC_API_KEY. Ollama was removed (it did not perform reliably on the
+M1). The LLMProvider Protocol is retained so tests can inject fakes and so a future
+vendor can be added without touching business logic.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
-
-import httpx
 
 from app.config import get_settings
 
@@ -39,75 +36,22 @@ class LLMProvider(Protocol):
     ) -> LLMResult: ...
 
 
-class OllamaProvider:
-    """Local Ollama provider via the OpenAI-compatible endpoint (D-027).
+class AnthropicProvider:
+    """Anthropic provider (Claude Haiku cheap / Claude Sonnet premium).
 
-    Uses httpx (already in requirements); no extra dependency needed.
-    cost_usd is always 0.0 for local inference.
+    Requires ANTHROPIC_API_KEY. Model ids default to the configured cheap/premium
+    tiers (ai_model_cheap / ai_model_premium) so a model bump is a config change.
     """
 
     def __init__(
         self,
-        base_url:      str | None = None,
         model_cheap:   str | None = None,
         model_premium: str | None = None,
     ) -> None:
         cfg = get_settings()
-        self._base_url = (base_url or cfg.ai_ollama_base_url).rstrip("/")
         self._models: dict[str, str] = {
-            "cheap":   model_cheap   or cfg.ai_ollama_model_cheap,
-            "premium": model_premium or cfg.ai_ollama_model_premium,
-        }
-
-    def complete(
-        self,
-        *,
-        prompt_id:      str,
-        prompt_version: str,
-        system:         str,
-        payload_json:   str,
-        model_tier:     str = "cheap",
-    ) -> LLMResult:
-        model_id = self._models.get(model_tier, self._models["cheap"])
-
-        resp = httpx.post(
-            f"{self._base_url}/v1/chat/completions",
-            json={
-                "model": model_id,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user",   "content": payload_json},
-                ],
-                "temperature": 0.1,   # factual grounding favours low temperature
-                "max_tokens":  512,
-            },
-            timeout=120.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        text  = data["choices"][0]["message"]["content"]
-        usage = data.get("usage", {})
-        return LLMResult(
-            text=text,
-            model_id=model_id,
-            tokens_in=int(usage.get("prompt_tokens", 0)),
-            tokens_out=int(usage.get("completion_tokens", 0)),
-            cost_usd=0.0,
-        )
-
-
-class AnthropicProvider:
-    """Anthropic provider (Claude Haiku cheap / premium).  Requires ANTHROPIC_API_KEY."""
-
-    def __init__(
-        self,
-        model_cheap:   str = "claude-haiku-4-5-20251001",
-        model_premium: str = "claude-sonnet-4-6",
-    ) -> None:
-        self._models: dict[str, str] = {
-            "cheap":   model_cheap,
-            "premium": model_premium,
+            "cheap":   model_cheap   or cfg.ai_model_cheap,
+            "premium": model_premium or cfg.ai_model_premium,
         }
 
     def complete(
@@ -145,12 +89,10 @@ class AnthropicProvider:
 
 
 def get_default_provider() -> LLMProvider:
-    """Return the configured default provider.
+    """Return the default LLM provider — Anthropic Claude (D-057).
 
-    Set SAAKSHYA_AI_PROVIDER=anthropic to switch to Claude (requires API key).
-    Default: OllamaProvider (local, no API key, qwen2.5:7b-instruct).
+    Anthropic is the sole supported provider; ANTHROPIC_API_KEY must be set.
+    An unrecognised SAAKSHYA_AI_PROVIDER falls back to Anthropic rather than
+    silently disabling AI.
     """
-    cfg = get_settings()
-    if cfg.ai_provider == "anthropic":
-        return AnthropicProvider()
-    return OllamaProvider()
+    return AnthropicProvider()

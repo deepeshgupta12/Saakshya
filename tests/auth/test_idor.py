@@ -92,13 +92,14 @@ def test_delete_cross_user_forbidden(client, two_users):
     assert resp_b.status_code == 200
 
 
-def test_add_item_cross_user_forbidden(client, two_users, mem_db):
+def test_add_item_cross_user_forbidden(client, two_users, pg_conn):
     (uid_a, tok_a), (uid_b, tok_b) = two_users
     wid_b = _create_watchlist(client, tok_b, "B-Items")
 
-    # Seed a valid symbol so the symbol-exists check passes
-    mem_db.execute(
-        "INSERT OR IGNORE INTO stock_master (primary_symbol, name) VALUES (?, ?)",
+    # Seed a valid symbol (TimescaleDB) so the symbol-exists check passes
+    pg_conn.execute(
+        "INSERT INTO stock_master (primary_symbol, name) VALUES (%s, %s) "
+        "ON CONFLICT (primary_symbol) DO NOTHING",
         ["RELIANCE", "Reliance Industries"],
     )
 
@@ -110,11 +111,12 @@ def test_add_item_cross_user_forbidden(client, two_users, mem_db):
     assert resp.status_code in (403, 404)
 
 
-def test_remove_item_cross_user_forbidden(client, two_users, mem_db):
+def test_remove_item_cross_user_forbidden(client, two_users, pg_conn):
     (uid_a, tok_a), (uid_b, tok_b) = two_users
-    # Seed symbol
-    mem_db.execute(
-        "INSERT OR IGNORE INTO stock_master (primary_symbol, name) VALUES (?, ?)",
+    # Seed symbol (TimescaleDB)
+    pg_conn.execute(
+        "INSERT INTO stock_master (primary_symbol, name) VALUES (%s, %s) "
+        "ON CONFLICT (primary_symbol) DO NOTHING",
         ["INFY", "Infosys"],
     )
     wid_b = _create_watchlist(client, tok_b, "B-WithItem")

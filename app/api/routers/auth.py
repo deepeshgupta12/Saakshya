@@ -1,6 +1,6 @@
 """Auth endpoints — POST /api/auth/{register|login|refresh|logout|oauth/google}.
 
-Local-first: HS256 JWT, Argon2id passwords, DuckDB token store.
+Local-first: HS256 JWT, Argon2id passwords, MongoDB token store (D-059).
 Mode-A compliant: no financial data, no PII beyond email + display_name.
 Rate limits: auth_rate_limit_dep on register/login.
 """
@@ -9,31 +9,29 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from jose import JWTError
 from pydantic import BaseModel, EmailStr
+from pymongo.database import Database
 
-from app.api.deps import AuthUserDep, DbDep
+from app.api.deps import AuthUserDep, MongoDep
 from app.api.envelope import ok
 from app.api.ratelimit import auth_rate_limit_dep
-from app.auth.oauth import validate_google_id_token, get_or_create_google_user
-from app.auth.passwords import hash_password, verify_password, MIN_LENGTH
+from app.auth.oauth import get_or_create_google_user, validate_google_id_token
+from app.auth.passwords import MIN_LENGTH, hash_password, verify_password
 from app.auth.tokens import (
     create_access_token,
     create_refresh_token,
     hash_refresh_token,
-    make_token_id,
     make_family_id,
+    make_token_id,
     refresh_expiry,
 )
 from app.config import get_settings
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-
-# ── Request / Response models ──────────────────────────────────────────────
 
 class RegisterBody(BaseModel):
     email: EmailStr
@@ -56,38 +54,29 @@ class GoogleOAuthBody(BaseModel):
     id_token: str
 
 
-# ── Helpers ────────────────────────────────────────────────────────────────
-
-def _issue_token_pair(conn: Any, user_id: str, plan: str) -> dict[str, Any]:
-    """Create access + refresh tokens, persist refresh to DB, return the pair."""
+def _issue_token_pair(mongo: Database, user_id: str, plan: str) -> dict[str, object]:
+    """Create access + refresh tokens, persist the refresh token to Mongo."""
     access = create_access_token(user_id, plan)
     raw_refresh, refresh_hash = create_refresh_token()
-    token_id  = make_token_id()
-    family_id = make_family_id()
-    expires   = refresh_expiry()
-    conn.execute(
-        "INSERT INTO refresh_tokens (token_id, family_id, user_id, token_hash, expires_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        [token_id, family_id, user_id, refresh_hash, expires],
-    )
-    return {
-        "access_token":  access,
-        "refresh_token": raw_refresh,
-        "expires_in":    900,
-        "plan":          plan,
-    }
+    mongo.refresh_tokens.insert_one({
+        "token_id":   make_token_id(),
+        "family_id":  make_family_id(),
+        "user_id":    user_id,
+        "token_hash": refresh_hash,
+        "revoked":    False,
+        "issued_at":  datetime.now(tz=timezone.utc),
+        "expires_at": refresh_expiry(),
+    })
+    return {"access_token": access, "refresh_token": raw_refresh, "expires_in": 900, "plan": plan}
 
-
-# ── Routes ─────────────────────────────────────────────────────────────────
 
 @router.post("/register", status_code=201)
 def register(
-    body:    RegisterBody,
+    body: RegisterBody,
     request: Request,
-    conn:    DbDep,
-    _rl:     None = Depends(auth_rate_limit_dep),
-) -> dict[str, Any]:
-    # Compliance gate: consent required before account creation (SPEC §6.7).
+    mongo: MongoDep,
+    _rl: None = Depends(auth_rate_limit_dep),
+) -> dict[str, object]:
     if not body.consent_not_advice or not body.consent_ai_use:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -98,112 +87,85 @@ def register(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Password must be at least {MIN_LENGTH} characters.",
         )
-    # Duplicate email check (email is UNIQUE in users table).
-    existing = conn.execute(
-        "SELECT user_id FROM users WHERE email = ?", [str(body.email)]
-    ).fetchone()
-    if existing:
-        # Non-leaking error — don't distinguish existing vs new account.
+    if mongo.users.find_one({"email": str(body.email)}, {"user_id": 1}):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="An account with this email already exists.",
         )
-    user_id   = str(uuid.uuid4())
-    pw_hash   = hash_password(body.password)
-    plan      = "free"
-    conn.execute(
-        "INSERT INTO users (user_id, email, password_hash, display_name, plan) "
-        "VALUES (?, ?, ?, ?, ?)",
-        [user_id, str(body.email), pw_hash, body.display_name or str(body.email).split("@")[0], plan],
-    )
-    # Record consents (SPEC §6.7, docs/23 §1).
-    for ctype in ("not_advice", "ai_use"):
-        conn.execute(
-            "INSERT INTO consents (consent_id, user_id, consent_type) VALUES (?, ?, ?)",
-            [str(uuid.uuid4()), user_id, ctype],
-        )
-    tokens = _issue_token_pair(conn, user_id, plan)
+    user_id = str(uuid.uuid4())
+    now = datetime.now(tz=timezone.utc)
+    mongo.users.insert_one({
+        "user_id": user_id, "email": str(body.email),
+        "password_hash": hash_password(body.password),
+        "display_name": body.display_name or str(body.email).split("@")[0],
+        "plan": "free", "created_at": now, "updated_at": now,
+    })
+    mongo.consents.insert_many([
+        {"consent_id": str(uuid.uuid4()), "user_id": user_id,
+         "consent_type": ctype, "granted_at": now}
+        for ctype in ("not_advice", "ai_use")
+    ])
+    tokens = _issue_token_pair(mongo, user_id, "free")
     return ok({"user_id": user_id, "email": str(body.email), **tokens})
 
 
 @router.post("/login")
 def login(
-    body:    LoginBody,
+    body: LoginBody,
     request: Request,
-    conn:    DbDep,
-    _rl:     None = Depends(auth_rate_limit_dep),
-) -> dict[str, Any]:
-    row = conn.execute(
-        "SELECT user_id, password_hash, plan FROM users WHERE email = ?",
-        [str(body.email)],
-    ).fetchone()
-    # Constant-time response — same error whether email or password is wrong.
-    _GENERIC_ERROR = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid email or password.",
+    mongo: MongoDep,
+    _rl: None = Depends(auth_rate_limit_dep),
+) -> dict[str, object]:
+    doc = mongo.users.find_one({"email": str(body.email)})
+    generic_error = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password."
     )
-    if row is None:
-        raise _GENERIC_ERROR
-    user_id, pw_hash, plan = row
-    if not verify_password(body.password, pw_hash):
-        raise _GENERIC_ERROR
-    tokens = _issue_token_pair(conn, user_id, plan)
-    return ok(tokens)
+    if doc is None or not verify_password(body.password, doc.get("password_hash") or ""):
+        raise generic_error
+    return ok(_issue_token_pair(mongo, doc["user_id"], doc.get("plan", "free")))
 
 
 @router.post("/refresh")
-def refresh_token(
-    body: RefreshBody,
-    conn: DbDep,
-) -> dict[str, Any]:
+def refresh_token(body: RefreshBody, mongo: MongoDep) -> dict[str, object]:
     incoming_hash = hash_refresh_token(body.refresh_token)
-    row = conn.execute(
-        "SELECT token_id, family_id, user_id, revoked, expires_at "
-        "FROM refresh_tokens WHERE token_hash = ?",
-        [incoming_hash],
-    ).fetchone()
-    if row is None:
+    doc = mongo.refresh_tokens.find_one({"token_hash": incoming_hash})
+    if doc is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token.")
-    token_id, family_id, user_id, revoked, expires_at = row
-    if revoked:
-        # Replay detected — revoke entire family (docs/23 §1 reuse detection).
-        conn.execute(
-            "UPDATE refresh_tokens SET revoked = TRUE WHERE family_id = ?", [family_id]
+    if doc.get("revoked"):
+        # Replay detected — revoke the whole family (docs/23 §1 reuse detection).
+        mongo.refresh_tokens.update_many(
+            {"family_id": doc["family_id"]}, {"$set": {"revoked": True}}
         )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token replayed; session revoked.")
     now = datetime.now(timezone.utc)
+    expires_at = doc["expires_at"]
     if isinstance(expires_at, str):
         expires_at = datetime.fromisoformat(expires_at)
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     if now > expires_at:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token expired.")
-    # Rotate: revoke old token, issue new pair in same family.
-    conn.execute("UPDATE refresh_tokens SET revoked = TRUE WHERE token_id = ?", [token_id])
-    user_row = conn.execute("SELECT plan FROM users WHERE user_id = ?", [user_id]).fetchone()
-    plan = user_row[0] if user_row else "free"
-    access = create_access_token(user_id, plan)
+    # Rotate: revoke old, issue new pair in the same family.
+    mongo.refresh_tokens.update_one({"token_id": doc["token_id"]}, {"$set": {"revoked": True}})
+    user = mongo.users.find_one({"user_id": doc["user_id"]}, {"plan": 1})
+    plan = user["plan"] if user else "free"
+    access = create_access_token(doc["user_id"], plan)
     raw_refresh, refresh_hash = create_refresh_token()
-    new_token_id = make_token_id()
-    expires = refresh_expiry()
-    conn.execute(
-        "INSERT INTO refresh_tokens (token_id, family_id, user_id, token_hash, expires_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        [new_token_id, family_id, user_id, refresh_hash, expires],
-    )
+    mongo.refresh_tokens.insert_one({
+        "token_id":   make_token_id(),
+        "family_id":  doc["family_id"],
+        "user_id":    doc["user_id"],
+        "token_hash": refresh_hash,
+        "revoked":    False,
+        "issued_at":  now,
+        "expires_at": refresh_expiry(),
+    })
     return ok({"access_token": access, "refresh_token": raw_refresh, "expires_in": 900, "plan": plan})
 
 
 @router.post("/oauth/google", status_code=200)
-def oauth_google(
-    body: GoogleOAuthBody,
-    conn: DbDep,
-) -> dict[str, Any]:
-    """Validate a Google ID token and return our JWT pair.
-
-    Requires GOOGLE_CLIENT_ID env var. Returns 503 when unconfigured.
-    Rate-limit via the auth bucket is enforced by the gateway layer.
-    """
+def oauth_google(body: GoogleOAuthBody, mongo: MongoDep) -> dict[str, object]:
+    """Validate a Google ID token and return our JWT pair (503 if unconfigured)."""
     client_id: str | None = getattr(get_settings(), "google_client_id", None)
     if not client_id:
         raise HTTPException(
@@ -217,20 +179,16 @@ def oauth_google(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid Google ID token: {exc}",
         ) from exc
-    user_id, plan = get_or_create_google_user(conn, claims)
-    tokens = _issue_token_pair(conn, user_id, plan)
+    user_id, plan = get_or_create_google_user(mongo, claims)
+    tokens = _issue_token_pair(mongo, user_id, plan)
     return ok({"user_id": user_id, "email": claims.get("email", ""), **tokens})
 
 
 @router.post("/logout")
-def logout(
-    body: RefreshBody,
-    conn: DbDep,
-    _user: AuthUserDep,
-) -> dict[str, Any]:
+def logout(body: RefreshBody, mongo: MongoDep, _user: AuthUserDep) -> dict[str, object]:
     incoming_hash = hash_refresh_token(body.refresh_token)
-    conn.execute(
-        "UPDATE refresh_tokens SET revoked = TRUE WHERE token_hash = ? AND user_id = ?",
-        [incoming_hash, _user.user_id],
+    mongo.refresh_tokens.update_one(
+        {"token_hash": incoming_hash, "user_id": _user.user_id},
+        {"$set": {"revoked": True}},
     )
     return ok({"ok": True})

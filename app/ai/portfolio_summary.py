@@ -19,7 +19,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-import duckdb
+import psycopg
 
 from app.ai.audit import AuditRecord, write_audit
 from app.ai.budget import allow_call, increment_calls
@@ -173,7 +173,7 @@ def summarize_portfolio(
     payload:   PortfolioPayload,
     *,
     provider:  LLMProvider | None = None,
-    conn:      duckdb.DuckDBPyConnection | None = None,
+    conn:      psycopg.Connection | None = None,
 ) -> PortfolioSummary:
     """Generate a grounded portfolio summary (Mode-A safe).
 
@@ -202,7 +202,7 @@ def summarize_portfolio(
 def _generate(
     payload:  PortfolioPayload,
     provider: LLMProvider,
-    conn:     duckdb.DuckDBPyConnection | None,
+    conn:     psycopg.Connection | None,
 ) -> PortfolioSummary:
     cfg = get_settings()
     system_text, prompt_version, model_tier = get_prompt("portfolio_summary")
@@ -295,7 +295,7 @@ def _write_audit(
     user_visible: str,
     *,
     suppressed: bool,
-    conn: duckdb.DuckDBPyConnection | None,
+    conn: psycopg.Connection | None,
 ) -> str:
     if conn is None:
         return ""
@@ -324,7 +324,7 @@ def _write_audit(
 
 def _audit_suppressed(
     payload: PortfolioPayload,
-    conn: duckdb.DuckDBPyConnection | None,
+    conn: psycopg.Connection | None,
 ) -> str:
     return _write_audit(payload, None, None, None, _SUPPRESSED, suppressed=True, conn=conn)
 
@@ -332,7 +332,7 @@ def _audit_suppressed(
 def _audit_degraded(
     payload: PortfolioPayload,
     summary: str,
-    conn: duckdb.DuckDBPyConnection | None,
+    conn: psycopg.Connection | None,
 ) -> str:
     if conn is None:
         return ""

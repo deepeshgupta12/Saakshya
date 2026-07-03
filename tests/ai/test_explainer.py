@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import duckdb
 
 from app.ai.explainer import explain_market, explain_stock
 from app.ai.payload import (
@@ -14,16 +13,14 @@ from app.ai.payload import (
     Subject,
 )
 from app.ai.provider import LLMResult
-from app.storage.duckdb import init_schema
+from tests.dbutil import open_fresh_pg
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _in_memory_db() -> duckdb.DuckDBPyConnection:
-    conn = duckdb.connect(":memory:")
-    init_schema(conn)
-    return conn
+def _in_memory_db():
+    return open_fresh_pg()
 
 
 def _make_payload(
@@ -200,7 +197,7 @@ class TestCeilingDegradation:
         today = _today()
         # Insert a count exceeding the ceiling so allow_call returns False.
         conn.execute(
-            "INSERT INTO ai_daily_calls (call_date, call_count) VALUES (?, ?)",
+            "INSERT INTO ai_daily_calls (call_date, call_count) VALUES (%s, %s)",
             [today, ceiling + 1],
         )
 
@@ -223,7 +220,7 @@ class TestAuditLog:
 
         result = explain_stock(payload, provider=mock, conn=conn, use_cache=False)
         row = conn.execute(
-            "SELECT suppressed, degraded FROM ai_audit_log WHERE audit_id = ?",
+            "SELECT suppressed, degraded FROM ai_audit_log WHERE audit_id = %s",
             [result.audit_id],
         ).fetchone()
         assert row is not None
@@ -237,7 +234,7 @@ class TestAuditLog:
         result  = explain_stock(payload, provider=_MockProvider("x"), conn=conn)
 
         row = conn.execute(
-            "SELECT suppressed FROM ai_audit_log WHERE audit_id = ?",
+            "SELECT suppressed FROM ai_audit_log WHERE audit_id = %s",
             [result.audit_id],
         ).fetchone()
         assert row is not None

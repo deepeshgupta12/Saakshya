@@ -53,7 +53,7 @@ def _sector_rows(conn: Any, as_of: Any) -> list[dict[str, Any]]:
         WHERE o.session_date = (
             SELECT MAX(session_date)
             FROM daily_ohlc
-            WHERE session_date < ?
+            WHERE session_date < %s
               AND as_of_version = 1
         )
           AND o.as_of_version = 1
@@ -61,7 +61,7 @@ def _sector_rows(conn: Any, as_of: Any) -> list[dict[str, Any]]:
     cur AS (
         SELECT o.stock_id, o.close_adj
         FROM daily_ohlc o
-        WHERE o.session_date = ? AND o.as_of_version = 1
+        WHERE o.session_date = %s AND o.as_of_version = 1
     ),
     stock_chg AS (
         SELECT
@@ -137,7 +137,7 @@ def get_sector_detail(
         # Resolve sector_id (numeric) from slug.
         sec_name = match["name"]
         sec_row = conn.execute(
-            "SELECT sector_id FROM sector_master WHERE name = ?", [sec_name]
+            "SELECT sector_id FROM sector_master WHERE name = %s", [sec_name]
         ).fetchone()
         if sec_row:
             numeric_id = sec_row[0]
@@ -147,7 +147,7 @@ def get_sector_detail(
                 FROM daily_ohlc
                 WHERE session_date = (
                     SELECT MAX(session_date) FROM daily_ohlc
-                    WHERE session_date < ? AND as_of_version = 1
+                    WHERE session_date < %s AND as_of_version = 1
                 ) AND as_of_version = 1
             )
             SELECT
@@ -159,8 +159,8 @@ def get_sector_detail(
             FROM daily_ohlc o
             JOIN stock_master sm ON sm.stock_id = o.stock_id
             LEFT JOIN prev p ON p.stock_id = o.stock_id
-            WHERE o.session_date = ? AND o.as_of_version = 1
-              AND sm.sector_id = ?
+            WHERE o.session_date = %s AND o.as_of_version = 1
+              AND sm.sector_id = %s
             ORDER BY chg_pct DESC NULLS LAST
             LIMIT 10
             """

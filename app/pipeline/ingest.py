@@ -21,8 +21,13 @@ Pipeline stages (docs/12 §1):
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import psycopg
 
 from app.config import get_settings
 from app.data.base import OHLCRow, get_source
@@ -31,7 +36,7 @@ from app.data.corp_actions import ingest_corp_actions
 from app.data.normalize import to_bars
 from app.data.universe import load_universe, seed_universe
 from app.indicators.compute import ComputeSummary, compute_all
-from app.storage.duckdb import get_connection
+from app.storage.postgres import get_connection
 from app.storage.repository import DataQualityLog, Repository
 
 _AS_OF_VERSION = 1
@@ -55,15 +60,22 @@ class IngestSummary:
     empty_symbols: list[str] = field(default_factory=list)
 
 
-def run_ingest(limit: int | None = None, period: str | None = None) -> IngestSummary:
+def run_ingest(
+    limit: int | None = None,
+    period: str | None = None,
+    conn: "psycopg.Connection | None" = None,
+) -> IngestSummary:
     settings = get_settings()
     window = period or settings.history_period
     entries = load_universe()
     if limit is not None:
         entries = entries[:limit]
 
-    with get_connection() as conn:
-        repo = Repository(conn)
+    # Use caller's connection if provided (avoids a second write-connection to the
+    # same DuckDB file); otherwise open and manage our own.
+    ctx = nullcontext(conn) if conn is not None else get_connection()
+    with ctx as _conn:
+        repo = Repository(_conn)
         ticker_to_stock_id = seed_universe(repo, entries)
 
         source = get_source()
@@ -91,12 +103,11 @@ def run_ingest(limit: int | None = None, period: str | None = None) -> IngestSum
                 ))
 
         # ── M1: corp-action master ────────────────────────────────────────
-        # Always use yfinance as the corp-action source for now; the NSE corporate-
-        # action API adapter is a future iteration (docs/steps/01 §corp-actions).
-        from app.data.yfinance_source import YFinanceSource
-
-        yf_source = YFinanceSource()
-        ca_rows = yf_source.fetch_corporate_actions(tickers, since=_CORP_ACTION_SINCE)
+        # Corp actions come from the active source. Kite Connect exposes no
+        # corporate-action API (returns []), so series are stored unadjusted until a
+        # dedicated corp-action feed is added — a documented gap (docs/12 §3.4),
+        # never a silent mis-adjustment.
+        ca_rows = source.fetch_corporate_actions(tickers, since=_CORP_ACTION_SINCE)
         ca_count = ingest_corp_actions(
             repo, ticker_to_stock_id, ca_rows, as_of_version=_AS_OF_VERSION
         )

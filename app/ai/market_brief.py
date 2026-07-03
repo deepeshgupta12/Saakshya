@@ -14,7 +14,7 @@ import logging
 from datetime import date
 from typing import Any
 
-import duckdb
+import psycopg
 
 from app.ai.audit import AuditRecord, write_audit
 from app.ai.budget import allow_call, increment_calls
@@ -39,7 +39,7 @@ End every brief with: "Not investment advice. Evidence sourced from EOD data."\
 """
 
 
-def _build_brief_payload(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[str, Any] | None:
+def _build_brief_payload(conn: psycopg.Connection, as_of: date) -> dict[str, Any] | None:
     """Assemble a structured data payload for the brief from DB aggregates."""
     # Advance / decline.
     ad = conn.execute("""
@@ -47,13 +47,13 @@ def _build_brief_payload(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[s
             SELECT symbol, close,
                    LAG(close) OVER (PARTITION BY symbol ORDER BY session_date) AS prev_close
             FROM daily_ohlc
-            WHERE session_date <= ?
+            WHERE session_date <= %s
         )
         SELECT
             COUNT(*) FILTER (WHERE close > prev_close)  AS advances,
             COUNT(*) FILTER (WHERE close < prev_close)  AS declines,
             COUNT(*) FILTER (WHERE close = prev_close AND prev_close IS NOT NULL) AS unchanged
-        FROM prev WHERE session_date = ?
+        FROM prev WHERE session_date = %s
     """, [as_of, as_of]).fetchone()
     if ad is None or (ad[0] == 0 and ad[1] == 0):
         return None
@@ -70,12 +70,12 @@ def _build_brief_payload(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[s
                 LAG(o.close) OVER (PARTITION BY o.symbol ORDER BY o.session_date) AS prev_close
             FROM daily_ohlc o
             JOIN stock_master sm ON sm.primary_symbol = o.symbol
-            WHERE o.session_date <= ?
+            WHERE o.session_date <= %s
         )
         SELECT symbol, company_name, sector,
                ROUND(100.0 * (close - prev_close) / NULLIF(prev_close, 0), 2) AS chg_pct
         FROM ranked
-        WHERE session_date = ? AND prev_close IS NOT NULL
+        WHERE session_date = %s AND prev_close IS NOT NULL
         ORDER BY ABS(chg_pct) DESC
         LIMIT 10
     """, [as_of, as_of]).fetchall()
@@ -89,11 +89,11 @@ def _build_brief_payload(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[s
                 LAG(o.close) OVER (PARTITION BY o.symbol ORDER BY o.session_date) AS prev_close
             FROM daily_ohlc o
             JOIN stock_master sm ON sm.primary_symbol = o.symbol
-            WHERE o.session_date <= ? AND sm.sector IS NOT NULL
+            WHERE o.session_date <= %s AND sm.sector IS NOT NULL
         )
         SELECT sector, ROUND(AVG(100.0 * (close - prev_close) / NULLIF(prev_close, 0)), 2) AS avg_chg
         FROM ranked
-        WHERE session_date = ? AND prev_close IS NOT NULL
+        WHERE session_date = %s AND prev_close IS NOT NULL
         GROUP BY sector
         ORDER BY avg_chg DESC
         LIMIT 5
@@ -112,10 +112,10 @@ def _build_brief_payload(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[s
     }
 
 
-def get_or_generate_brief(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[str, Any]:
+def get_or_generate_brief(conn: psycopg.Connection, as_of: date) -> dict[str, Any]:
     """Return cached brief if available, otherwise generate and cache it."""
     cached = conn.execute(
-        "SELECT brief_text, model_version, created_at FROM market_brief_cache WHERE brief_date = ?",
+        "SELECT brief_text, model_version, created_at FROM market_brief_cache WHERE brief_date = %s",
         [as_of],
     ).fetchone()
     if cached:
@@ -164,7 +164,10 @@ def get_or_generate_brief(conn: duckdb.DuckDBPyConnection, as_of: date) -> dict[
             cost_usd=result.cost_usd,
         ), conn)
         conn.execute(
-            "INSERT OR REPLACE INTO market_brief_cache (brief_date, brief_text, audit_id, model_version) VALUES (?, ?, ?, ?)",
+            "INSERT INTO market_brief_cache (brief_date, brief_text, audit_id, model_version) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (brief_date) DO UPDATE SET brief_text=EXCLUDED.brief_text, "
+            "audit_id=EXCLUDED.audit_id, model_version=EXCLUDED.model_version",
             [as_of, brief_text, generated_audit_id, result.model_id],
         )
         return {"brief": brief_text, "model_version": result.model_id, "cached": False, "session_date": str(as_of)}

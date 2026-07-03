@@ -9,7 +9,7 @@ from datetime import date
 from pathlib import Path
 
 from app.data.reconcile import ReconcileResult, check_abnormal_jumps, reconcile_stock
-from app.storage.duckdb import get_connection
+from tests.dbutil import pg_cm as get_connection
 from app.storage.repository import CorpActionRecord, OhlcBar, Repository, StockMaster
 
 MEMORY = Path(":memory:")
@@ -67,7 +67,7 @@ def test_mismatch_writes_dq_log() -> None:
 
         # Confirm DQ log was written.
         dq_rows = conn.execute(
-            "SELECT check_type, status FROM data_quality_logs WHERE stock_id=?", [sid]
+            "SELECT check_type, status FROM data_quality_logs WHERE stock_id=%s", [sid]
         ).fetchall()
 
     assert result.mismatches == 1
@@ -87,7 +87,7 @@ def test_no_yf_reference_marks_no_reference() -> None:
         result = reconcile_stock(sid, bars, {}, repo, job_id="test_no_ref")
 
         dq_count = conn.execute(
-            "SELECT count(*) FROM data_quality_logs WHERE stock_id=?", [sid]
+            "SELECT count(*) FROM data_quality_logs WHERE stock_id=%s", [sid]
         ).fetchone()[0]
 
     assert result.no_reference == 1
@@ -133,7 +133,7 @@ def test_abnormal_jump_no_corp_action_quarantined() -> None:
         count = check_abnormal_jumps(sid, bars, [], repo, "test_jump", threshold=0.15)
 
         dq_rows = conn.execute(
-            "SELECT check_type FROM data_quality_logs WHERE stock_id=?", [sid]
+            "SELECT check_type FROM data_quality_logs WHERE stock_id=%s", [sid]
         ).fetchall()
 
     assert count == 1

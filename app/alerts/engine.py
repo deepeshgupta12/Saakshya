@@ -18,10 +18,9 @@ Mode-A discipline: every template is past-tense, event-reporting.
 
 from __future__ import annotations
 
-import json
-import uuid
 import logging
-from datetime import date
+import uuid
+from datetime import date, datetime, timezone
 from typing import Any
 
 from app.alerts.models import (
@@ -248,16 +247,17 @@ def run_alert_evaluation(
     user_daily_counts: dict[str, int] = {}
     events: list[AlertEvent]          = []
 
-    # Load dedup keys already fired today from DB (if available)
+    # Load dedup keys already fired today from Mongo (if available)
     if conn is not None:
         try:
-            rows = conn.execute(
-                "SELECT dedup_key FROM alert_events WHERE as_of_date = ?",
-                [as_of],
-            ).fetchall()
-            fired_dedup_keys = {r[0] for r in rows}
+            fired_dedup_keys = {
+                d["dedup_key"]
+                for d in conn.alert_events.find(
+                    {"as_of_date": as_of.isoformat()}, {"dedup_key": 1}
+                )
+            }
         except Exception:
-            pass  # DB may not have the table yet (pre-migration run)
+            pass  # DB may not be reachable (pre-migration run)
 
     # Sort candidates by priority for per-user throttle
     def priority(c: dict[str, Any]) -> int:
@@ -354,22 +354,27 @@ def run_alert_evaluation(
 
 
 def _persist_event(event: AlertEvent, conn: Any) -> None:
-    """Write fired-alert event to DB (docs/17 §6, delivery log)."""
+    """Write a fired-alert event to Mongo (docs/17 §6, delivery log).
+
+    Idempotent via the unique (dedup_key, as_of_date) index — a re-run of the same
+    EOD batch upserts rather than duplicating. as_of_date is stored as an ISO string
+    (pymongo does not accept datetime.date).
+    """
     if conn is None:
         return
     try:
-        conn.execute(
-            "INSERT OR IGNORE INTO alert_events "
-            "(event_id, alert_id, as_of_date, payload_json, dedup_key, rendered_text, "
-            "guardrail_status, channels_json, delivery_log_json) "
-            "VALUES (?,?,?,?,?,?,?,?,?)",
-            [
-                event.event_id, event.alert_id, event.as_of_date,
-                json.dumps(event.payload), event.dedup_key, event.rendered_text,
-                event.guardrail_status,
-                json.dumps(event.channels),
-                json.dumps(event.delivery_log),
-            ],
+        as_of_str = event.as_of_date.isoformat()
+        conn.alert_events.update_one(
+            {"dedup_key": event.dedup_key, "as_of_date": as_of_str},
+            {"$setOnInsert": {
+                "event_id": event.event_id, "alert_id": event.alert_id,
+                "as_of_date": as_of_str, "payload": event.payload,
+                "dedup_key": event.dedup_key, "rendered_text": event.rendered_text,
+                "guardrail_status": event.guardrail_status,
+                "channels": event.channels, "delivery_log": event.delivery_log,
+                "created_at": datetime.now(tz=timezone.utc),
+            }},
+            upsert=True,
         )
     except Exception as exc:
         log.warning("Failed to persist alert event %s: %s", event.event_id, exc)

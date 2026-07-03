@@ -1,10 +1,13 @@
 # Saakshya local-first (M1 Mac, arm64 wheels, NO TA-Lib) — SPEC §12 / docs/27 §7.3
-# Core data + storage
-duckdb==1.1.3
+# Core data + storage (polyglot: TimescaleDB + MongoDB, D-059)
+psycopg[binary]==3.2.3    # TimescaleDB/Postgres driver (analytics core)
+pymongo==4.10.1           # MongoDB driver (user/app documents)
 pandas==2.2.3
 numpy==2.1.3
 scipy==1.14.1            # M3b: Spearman IC computation (spearmanr)
-yfinance==0.2.50            # prototype-only EOD source (SPEC §8); not for commercial redistribution
+# EOD market data — Zerodha Kite Connect is the sole source (D-058, SPEC §8).
+kiteconnect==5.0.1       # official Zerodha SDK: instruments + historical_data
+pyotp==2.9.0             # automated TOTP 2FA for unattended daily login
 # Config + models
 pydantic==2.10.4
 pydantic-settings==2.7.0

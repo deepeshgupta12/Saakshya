@@ -170,19 +170,15 @@ The Saakshya spec's personalization (personalize toward what the user looks at) 
 
 **EOD-first (T+1).** Ingest the previous session after close → normalize → corp-action adjust → compute indicators + sector scores → run scanners → process news → generate AI summaries → deliver the morning brief. This suits swing trading, research, and portfolio monitoring, and avoids both live-data licensing cost and a large slice of compliance exposure. Live data is a later, separately-licensed premium tier.
 
-**Licensing reality:** for a commercial product that redistributes NSE/BSE data, free/unofficial sources are **prototype-only**. Production requires a licensed vendor agreement with explicit **commercial redistribution rights**. Historical adjusted depth (years, including delisted names) is a separate procurement item and a gating dependency for scanners and backtesting.
+**Licensing reality:** Kite Connect data is licensed for the authenticated user. Commercial redistribution of NSE/BSE data stays blocked (`supports("redistribution") == False`) until a redistribution licence is in force. Historical adjusted depth (years, including delisted names) is a separate procurement item and a gating dependency for scanners and backtesting.
 
-**Layered ingestion behind a single `DataSource` adapter** (business logic never depends on the vendor):
+**Single `DataSource` adapter — Zerodha Kite Connect is the sole source (D-058)** (business logic never depends on the vendor; the seam is kept for a future vendor swap):
 
 | Source | Provides | Stage | Caveat |
 |---|---|---|---|
-| **yfinance (Yahoo)** | Adjusted OHLCV for `.NS` / `.BO`; auto split/dividend adjustment | **Prototype / local** | Not a licensed feed; no delivery %. Prototype only. |
-| **NSE Bhavcopy (CM-UDiFF)** | Official daily EOD OHLCV + volume, all listed equities | Authoritative EOD | Redistribution review; download needs correct headers/cookies. |
-| **NSE sec_bhavdata** | Delivery quantity / delivery % (for the volume-breakout scanner) | Authoritative EOD | Same review; pair with bhavcopy by date. |
-| Alpha Vantage / Twelve Data / Marketstack | Free-tier EOD APIs (keys) | Prototype fallback | Tight caps; verify India coverage symbol-by-symbol. |
-| **TrueData / Global Datafeeds** | Licensed EOD (+live), redistribution rights, corp-action adjustment, symbol mapping | **Production** | Paid; procurement lead time. Drops in behind the same adapter. |
+| **Zerodha Kite Connect** | Daily OHLCV via `historical_data`; NSE/BSE instrument master | **Sole source (local + production)** | Paid API. Candles **unadjusted**; **no delivery %**; **no corporate-action API**. Daily `access_token` (expires ~07:30 IST), auto-refreshed by `app/data/kite_auth.py` (TOTP login + browser-callback fallback). Not licensed for commercial redistribution. |
 
-**Starting config:** primary **yfinance** (prototype); authoritative supplement **NSE Bhavcopy + delivery file**; production **licensed vendor** swapped in behind the adapter without touching scanners, indicators, or AI. *yfinance auto-adjustment ≠ the production solution (see 6.1).*
+**Config:** `SAAKSHYA_ACTIVE_DATA_SOURCE=kite`; `KITE_API_KEY`/`KITE_API_SECRET`/`KITE_ACCESS_TOKEN` from `.env`. Adapter: `app/data/kite_source.py`. **Known gaps** (documented, not silent — see docs/12 §3.4): no corp-action adjustment (series stored unadjusted), no delivery %. *(yfinance, NSE Bhavcopy and the TrueData/Global-Datafeeds layering were removed in the 2026-07-02 reset.)*
 
 ---
 
@@ -195,10 +191,10 @@ Two stacks: the **production** target (both source docs agree) and the **local-f
 | Frontend | Next.js, React, TS, Tailwind, Framer Motion; TradingView Lightweight Charts / ECharts | **Deferred** (API + notebook first; add Next.js once core is validated) |
 | Backend | Python FastAPI, Celery, Redis | FastAPI + Uvicorn; **plain scripts / Makefile** (defer Celery+Redis) |
 | Data processing | Polars/Pandas, NumPy, pandas-ta; Dagster/Airflow | Vectorized pandas/NumPy or pandas-ta — **avoid TA-Lib** (M1 C-lib friction) |
-| Databases | PostgreSQL + TimescaleDB; Redis; ClickHouse (later); S3 | **DuckDB (single file)** |
+| Databases | **TimescaleDB (analytics core) + MongoDB (user/app docs)** — polyglot (D-059); Redis/ClickHouse/S3 later | **TimescaleDB + MongoDB via docker-compose** (DuckDB retired, D-059) |
 | Search / vector | OpenSearch/Elasticsearch; pgvector | Deferred |
 | AI/ML | LangGraph/LlamaIndex, RAG, classifiers, ranking; provider abstraction | Anthropic SDK → **Claude Haiku** (`claude-haiku-4-5-20251001`), key via env var |
-| Infra/DevOps | Cloud (AWS/GCP), Docker, K8s, Terraform, GitHub Actions, observability + **AI-spend meter** | None (one laptop); a `docker-compose.yml` provided for *later*, not run yet |
+| Infra/DevOps | Cloud (AWS/GCP), Docker, K8s, Terraform, GitHub Actions, observability + **AI-spend meter** | Docker Desktop for the two local DBs (`docker-compose.yml`); otherwise one laptop, plain scripts |
 | Compliance | Admin console: blocked-words, prompts, source reliability, audit logs | Prototype-grade guardrail + grounding check in the AI module |
 
 **Two architectural additions over the originals** (both stacks): **as-of versioning fields** on all time-series and indicator entities, and an **AI-generation audit-log** entity. Keep the **provider abstraction** from the Saakshya stack — default to Claude Haiku locally, reserve a premium Claude model for complex synthesis later.

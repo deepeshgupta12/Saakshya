@@ -116,7 +116,7 @@ def ingest_source(conn: Any, source_id: str, feed_url: str, redistribution_ok: b
         article_id = _article_id(url)
         # Skip if already stored.
         exists = conn.execute(
-            "SELECT 1 FROM news_items WHERE article_id = ?", [article_id]
+            "SELECT 1 FROM news_items WHERE article_id = %s", [article_id]
         ).fetchone()
         if exists:
             continue
@@ -126,8 +126,8 @@ def ingest_source(conn: Any, source_id: str, feed_url: str, redistribution_ok: b
             near_dup = conn.execute(
                 """
                 SELECT 1 FROM news_items
-                WHERE source_id = ? AND headline = ?
-                  AND abs(epoch(ingested_at) - epoch(?)) < ?
+                WHERE source_id = %s AND headline = %s
+                  AND abs(extract(epoch from ingested_at) - extract(epoch from %s::timestamp)) < %s
                 """,
                 [source_id, headline, raw["published_at"], _DEDUP_WINDOW_SECONDS],
             ).fetchone()
@@ -139,7 +139,7 @@ def ingest_source(conn: Any, source_id: str, feed_url: str, redistribution_ok: b
             """
             INSERT OR IGNORE INTO news_items
               (article_id, source_id, headline, body, url, published_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
             [article_id, source_id, headline, body, url, raw["published_at"]],
         )
@@ -182,7 +182,7 @@ def seed_default_sources(conn: Any) -> None:
             """
             INSERT OR IGNORE INTO news_sources
               (source_id, name, base_url, feed_url, feed_type, reliability, redistribution_ok)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
             list(row),
         )

@@ -9,10 +9,11 @@ import pytest
 MODULES = [
     "app",
     "app.config",
-    "app.storage.duckdb",
+    "app.storage.postgres",
+    "app.storage.mongodb",
     "app.storage.repository",
     "app.data.base",
-    "app.data.yfinance_source",
+    "app.data.kite_source",
     "app.data.universe",
     "app.data.normalize",
     "app.pipeline.ingest",

@@ -1,21 +1,47 @@
-# For LATER (graduating off the laptop, SPEC §9 / §12) — DO NOT run during local-first.
-# The local-first core uses DuckDB + plain scripts; this compose file documents the
-# production-shaped services so the swap is a known quantity.
-version: "3.9"
+# Saakshya local-first databases (D-059 polyglot persistence — replaces DuckDB).
+#   timescaledb — analytics core (OHLC/indicators/scanners/AI/news), hypertables
+#   mongo       — user/app documents (portfolios, alerts, strategies, watchlists, auth)
+# Start: `docker compose up -d`  ·  Stop: `docker compose down`  ·  Data persists in volumes.
 
 services:
-  postgres:
-    image: timescale/timescaledb:latest-pg16
+  timescaledb:
+    image: timescale/timescaledb:2.17.2-pg16
+    container_name: saakshya-timescale
     environment:
-      POSTGRES_DB: saakshya
       POSTGRES_USER: saakshya
-      POSTGRES_PASSWORD: change-me
-    ports: ["5432:5432"]
-    volumes: ["pgdata:/var/lib/postgresql/data"]
+      POSTGRES_PASSWORD: saakshya
+      POSTGRES_DB: saakshya
+    ports:
+      # Host 5544 → container 5432 (host 5432 is often taken by another local Postgres).
+      - "5544:5432"
+    volumes:
+      - saakshya_timescale:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saakshya -d saakshya"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  redis:
-    image: redis:7-alpine
-    ports: ["6379:6379"]
+  mongo:
+    image: mongo:7.0
+    container_name: saakshya-mongo
+    environment:
+      MONGO_INITDB_DATABASE: saakshya
+    ports:
+      - "27017:27017"
+    volumes:
+      - saakshya_mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis is a later concern (prod rate-limiting / Celery); kept commented for local-first.
+  # redis:
+  #   image: redis:7-alpine
+  #   ports: ["6379:6379"]
 
 volumes:
-  pgdata:
+  saakshya_timescale:
+  saakshya_mongo:

@@ -21,7 +21,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-import duckdb
+import psycopg
 
 from app.ai.audit import AuditRecord, write_audit
 from app.ai.budget import allow_call, increment_calls
@@ -64,7 +64,7 @@ def explain_stock(
     payload:   Payload,
     *,
     provider:  LLMProvider | None = None,
-    conn:      duckdb.DuckDBPyConnection | None = None,
+    conn:      psycopg.Connection | None = None,
     use_cache: bool = True,
 ) -> Explanation:
     """Generate a grounded stock scanner summary (Mode-A safe).
@@ -97,7 +97,7 @@ def explain_market(
     payload:   Payload,
     *,
     provider:  LLMProvider | None = None,
-    conn:      duckdb.DuckDBPyConnection | None = None,
+    conn:      psycopg.Connection | None = None,
     use_cache: bool = True,
 ) -> Explanation:
     """Generate a grounded market brief (Mode-A safe)."""
@@ -125,7 +125,7 @@ def _generate(
     prompt_id: str,
     agent:     str,
     provider:  LLMProvider,
-    conn:      duckdb.DuckDBPyConnection | None,
+    conn:      psycopg.Connection | None,
     use_cache: bool,
 ) -> Explanation:
     cfg = get_settings()
@@ -237,7 +237,7 @@ def _write_audit(
     user_visible:   str,
     *,
     suppressed: bool,
-    conn: duckdb.DuckDBPyConnection | None,
+    conn: psycopg.Connection | None,
 ) -> str:
     if conn is None:
         return ""
@@ -265,7 +265,7 @@ def _write_audit(
 
 
 def _audit_suppressed(
-    payload: Payload, agent: str, conn: duckdb.DuckDBPyConnection | None
+    payload: Payload, agent: str, conn: psycopg.Connection | None
 ) -> str:
     return _write_audit(
         payload, agent, "n/a", "n/a", None, None, None,
@@ -274,7 +274,7 @@ def _audit_suppressed(
 
 
 def _audit_degraded(
-    payload: Payload, agent: str, summary: str, conn: duckdb.DuckDBPyConnection | None
+    payload: Payload, agent: str, summary: str, conn: psycopg.Connection | None
 ) -> str:
     if conn is None:
         return ""

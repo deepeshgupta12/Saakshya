@@ -262,7 +262,7 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Final decision:** `OllamaProvider` becomes the default provider in `app/ai/provider.py`. `Settings.ai_provider` defaults to `"ollama"`, `ai_ollama_base_url` to `http://localhost:11434`, `ai_ollama_model_cheap` and `ai_ollama_model_premium` both to `qwen2.5:7b-instruct`. The `LLMProvider` protocol abstraction means switching to Claude Haiku in production (Mode B or cloud staging) is a single env-var change (`SAAKSHYA_AI_PROVIDER=anthropic`); no business-logic code changes. The verification harness and guardrail are applied identically regardless of provider — their criticality is **higher** with a local model (higher hallucination risk), making the suppress-not-guess default essential.
 - **Owner:** AI/ML + Engineering
 - **Impact:** `app/ai/provider.py`, `app/config.py`; zero impact on `explainer.py`, `verify.py`, `guardrail.py` (fully provider-agnostic). Cost is 0.0 USD per call locally. Provider can be swapped at deploy time.
-- **Status:** Accepted (supersedes the "Claude Haiku default" aspect of D-011; Ollama remains the local-first default until cloud staging begins)
+- **Status:** ~~Accepted~~ **Superseded by D-057** (2026-07-02): Ollama did not perform reliably on the M1; Anthropic Claude is now the sole provider.
 
 ### D-028 — M5 rate-limiter: in-process token bucket (no Redis) for local-first
 - **Date:** 2026-06-30
@@ -328,6 +328,33 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** All files in `web/src/components/` (ui, layout, market, scanner, stock, compliance, charts); `web/src/lib/motion/variants.ts`; `web/app/layout.tsx`; `design-system/saakshya/MASTER.md`.
 - **Status:** Accepted
 
+### D-057 — Anthropic Claude is the sole AI provider (Ollama removed)
+- **Date:** 2026-07-02
+- **Context:** D-027/D-051 made Ollama (Gemma 4) the local-first default. In practice it did not perform reliably on the M1 (model-pull/service issues), and AI summaries were silently not generating. The `AnthropicProvider` already existed behind the `LLMProvider` abstraction; the real blocker was that no `.env`/`ANTHROPIC_API_KEY` was set and the default pointed at Ollama.
+- **Alternatives considered:** Keep Ollama default + document the model-pull step (rejected — unreliable, off-spec); dual provider with Ollama fallback (rejected — user directive is Claude-only); mock provider (no real grounding signal).
+- **Final decision:** `Settings.ai_provider` defaults to `"anthropic"`; new `ai_model_cheap` (`claude-haiku-4-5-20251001`) / `ai_model_premium` (`claude-sonnet-4-6`) config fields replace the `ai_ollama_*` fields. `OllamaProvider` is removed from `app/ai/provider.py`; `get_default_provider()` returns `AnthropicProvider` unconditionally. The `LLMProvider` Protocol is retained for test injection and future vendors. Restores CLAUDE.md §7 / SPEC §9 intent.
+- **Owner:** AI/ML + Engineering
+- **Impact:** `app/config.py`, `app/ai/provider.py`, `app/strategy/nl_agent.py` (docstring), `tests/test_config.py`, `docs/14`, `.env`/`.env.example`. Interface-preserving — the 11 upstream AI callers are unchanged.
+- **Status:** Accepted (supersedes D-027, D-051)
+
+### D-058 — Zerodha Kite Connect is the sole market-data source (yfinance/Bhavcopy removed)
+- **Date:** 2026-07-02
+- **Context:** yfinance + the Yahoo chart-API fallback broke (Yahoo auth changes → all tickers returning parse errors) and are not licensed for redistribution. SPEC §8's layered source table (yfinance → Bhavcopy → TrueData) added confusion. User directive: Kite Connect only.
+- **Alternatives considered:** Keep the layered adapter table (rejected — user directive + reliability); NSE Bhavcopy (kept only as a possible future delivery-% supplement, not primary).
+- **Final decision:** A `KiteSource` implements the existing `DataSource` adapter; an automated daily token flow (`app/data/kite_auth.py`) serves the redirect `http://127.0.0.1:8000/kite/callback` to capture `request_token` → `access_token`. Universe comes from the Kite instrument master. `active_data_source` defaults to `kite`; `yfinance_source.py` is removed once validated. SPEC §8 + docs/12 updated.
+- **Owner:** Data/Backend
+- **Impact:** `app/data/` (new `kite_source.py`, `kite_auth.py`; delete `yfinance_source.py`), `app/data/universe.py`, `app/config.py`, `docs/12`, SPEC §8. Adapter pattern keeps business logic untouched.
+- **Status:** Accepted (implemented in Phase 2)
+
+### D-059 — Polyglot persistence: TimescaleDB (time-series) + MongoDB (documents); DuckDB dropped
+- **Date:** 2026-07-02
+- **Context:** User directive to replace DuckDB with MongoDB, then — after reviewing a TimescaleDB-vs-MongoDB benchmark — refined to using both, each for its strength. OHLC/indicator/sector/corp-action data is time-series (range scans, rollups, as-of point-in-time); users/portfolios/scanner-results/ai-summaries/news/strategies are document-shaped.
+- **Alternatives considered:** MongoDB-only (rejected — document store is weak for time-series rollups, per the benchmark's directional finding; note the paper is Timescale-published, so the "1400x" is discounted); DuckDB-only (rejected — user directive); Postgres+Timescale-only (rejected — loses document flexibility for app data).
+- **Final decision (boundary refined during Phase 3 — zero cross-DB joins):** **TimescaleDB** holds the ENTIRE analytics core — everything JOINed on `stock_id` + `as_of_version`: sector/industry/stock master, exchange_symbols, `daily_ohlc`/`index_ohlc`/`technical_indicators` (hypertables), corporate_actions, `scanner_results`, scanner_definitions, data_quality_logs, ai_audit_log, ai_summary_cache, ai_daily_calls, market_brief_cache, news_sources/items/stock_links. **MongoDB** holds only user/app documents (per-user, document-shaped, not joined to time-series): users, refresh_tokens, consents, user_preferences, oauth_identities, watchlists(+items), portfolios, transactions, alert_definitions, alert_events, strategy_definitions, screener_library. *(Correction: `scanner_results`/`ai_summaries`/`news` stay in Postgres — they JOIN stock_master, so a Mongo split would break those joins.)* DuckDB removed; local-first runs both via `docker-compose`. **Test-infra impact:** Postgres has no in-memory mode, so tests move from in-memory DuckDB to Dockerized Postgres+Mongo (testcontainers).
+- **Owner:** Data/Backend
+- **Impact:** `app/storage/*` (new mongodb + timescale clients, rewritten repository; delete `duckdb.py`), all pipeline/scanner/router modules (remove DuckDB `conn` threading), `docker-compose`, `docs/09`, `docs/11`, SPEC §9. HIGH blast radius.
+- **Status:** Accepted (implemented in Phase 3)
+
 ---
 
 ## 2. Decision index
@@ -360,7 +387,7 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-024 | 2026-06-30 | Weights stamped weights-v1-hypothesis / PENDING_M3B; composite not wired to UI | Quant/Eng + Product | All scanners / UI gate | Accepted |
 | D-025 | 2026-06-30 | M3b: GateConfig v1 thresholds (ρ≥0.6, IC t-stat≥1.5); scipy 1.14.1 added | Quant/Eng | Composite UI gate | Accepted (verdict pending — yfinance network-blocked on dev machine) |
 | D-026 | 2026-06-30 | DuckDB reserved keyword: `pivot` must be double-quoted in all SQL | Engineering | Storage/pipeline | Accepted |
-| D-027 | 2026-06-30 | Default AI provider: Ollama (`qwen2.5:7b-instruct`) replaces Claude Haiku for local-first MVP | AI/ML | Provider abstraction / cost | Accepted |
+| D-027 | 2026-06-30 | Default AI provider: Ollama (`qwen2.5:7b-instruct`) replaces Claude Haiku for local-first MVP | AI/ML | Provider abstraction / cost | ~~Accepted~~ Superseded by D-057 |
 | D-028 | 2026-06-30 | M5 rate-limiter: in-process token bucket (no Redis) for local-first | Engineering | API / ops | Accepted |
 | D-029 | 2026-06-30 | `do` reserved in DuckDB — use `ohlc` alias in all daily_ohlc JOINs | Engineering | Storage / all JOIN queries | Accepted |
 | D-030 | 2026-06-30 | Tailwind v4 theming: `@theme inline` CSS-var references (no `tailwind.config.ts`) | Frontend | Design tokens / runtime switching | Accepted |
@@ -390,6 +417,9 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-054 | 2026-07-01 | Strategy builder: stop_loss / target / trailing_stop conditions are BACKTEST exit parameters only; `compiler.py` strips them from the live scanner form; validation rejects them in `entry_rules`; no RA-gated per-stock level is ever surfaced as a live output — contract test asserts | Backend/Compliance | `app/strategy/compiler.py`, `app/strategy/validate.py` | Accepted |
 | D-055 | 2026-07-01 | NL→strategy agent returns `requires_confirmation: true` in every response; the strategy is proposed blocks for user review — it is never auto-run; "buy" in user NL maps to an entry condition, never a directive; guardrail check applied to agent prose | Compliance/AI | `app/strategy/nl_agent.py`, `app/api/routers/strategies.py` | Accepted |
 | D-056 | 2026-07-01 | Portfolio AI summary uses dedicated `portfolio_summary.v1.txt` prompt + `PortfolioPayload` (not the stock-summary `Payload`); grounding verifier checks all numerics in generated text against payload values; prompt SHA-256 enforced in registry | AI/Compliance | `app/ai/portfolio_summary.py`, `app/ai/registry.py` | Accepted |
+| D-057 | 2026-07-02 | Anthropic Claude is the sole AI provider (Haiku cheap / Sonnet premium); Ollama/Gemma removed — did not perform on M1; `LLMProvider` Protocol retained | AI/ML + Eng | `app/config.py`, `app/ai/provider.py`, `docs/14` | Accepted (supersedes D-027, D-051) |
+| D-058 | 2026-07-02 | Zerodha Kite Connect is the sole market-data source; automated daily token flow via `http://127.0.0.1:8000/kite/callback`; yfinance/Bhavcopy removed | Data/Backend | `app/data/`, `docs/12`, SPEC §8 | Accepted (Phase 2) |
+| D-059 | 2026-07-02 | Polyglot persistence: TimescaleDB (time-series) + MongoDB (documents); DuckDB dropped; both run locally via docker-compose | Data/Backend | `app/storage/`, `docs/09`, `docs/11`, SPEC §9 | Accepted (Phase 3) |
 
 ---
 

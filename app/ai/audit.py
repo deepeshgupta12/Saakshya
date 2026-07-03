@@ -11,7 +11,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-import duckdb
+import psycopg
 
 
 @dataclass
@@ -38,7 +38,7 @@ class AuditRecord:
     extra_fields:          dict[str, object] = field(default_factory=dict)
 
 
-def write_audit(record: AuditRecord, conn: duckdb.DuckDBPyConnection) -> str:
+def write_audit(record: AuditRecord, conn: psycopg.Connection) -> str:
     """Insert an audit record and return the generated audit_id."""
     audit_id  = f"gen-{uuid.uuid4().hex}"
     timestamp = datetime.now(tz=timezone.utc).isoformat()
@@ -53,10 +53,10 @@ def write_audit(record: AuditRecord, conn: duckdb.DuckDBPyConnection) -> str:
             suppressed, degraded, as_of_version,
             tokens_in, tokens_out, cost_usd
         ) VALUES (
-            ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?, ?, ?,
-            ?, ?, ?,
-            ?, ?, ?
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s
         )
         """,
         [

@@ -31,29 +31,58 @@ class Settings(BaseSettings):
     # Secret — read from the unprefixed ANTHROPIC_API_KEY (SPEC §14.4). Optional until M4.
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
 
-    # Storage / data paths.
-    duckdb_path: Path = Field(default=REPO_ROOT / "data" / "saakshya.duckdb")
+    # Storage (polyglot, D-059): TimescaleDB = analytics core; MongoDB = user/app docs.
+    # Both run locally via docker-compose. DuckDB is being retired.
+    timescale_url: str = Field(
+        default="postgresql://saakshya:saakshya@localhost:5544/saakshya",
+        alias="SAAKSHYA_TIMESCALE_URL",
+    )
+    mongodb_url: str = Field(
+        default="mongodb://localhost:27017", alias="SAAKSHYA_MONGODB_URL"
+    )
+    mongodb_db: str = Field(default="saakshya", alias="SAAKSHYA_MONGODB_DB")
     data_dir: Path = Field(default=REPO_ROOT / "data")
     universe_path: Path = Field(default=REPO_ROOT / "data" / "universe.csv")
 
-    # AI layer — provider + model config (M4, docs/14 §3, D-027, D-051).
-    # Default: Ollama with Gemma 4 (requires Ollama ≥ 0.31, local, no API key needed).
-    # cheap tier  → gemma4:4b  (~3 GB, fast repetitive summarisation on M1 Mac).
-    # premium tier → gemma4:12b (~8 GB, complex synthesis; fits 16 GB M1 Mac).
-    # Set SAAKSHYA_AI_PROVIDER=anthropic to use Claude Haiku via ANTHROPIC_API_KEY.
-    ai_provider: str = Field(default="ollama")
-    ai_ollama_base_url: str = Field(default="http://localhost:11434")
-    ai_ollama_model_cheap: str = Field(default="gemma4:4b")
-    ai_ollama_model_premium: str = Field(default="gemma4:12b")
+    # AI layer — provider + model config (M4, docs/14 §3; D-057 supersedes D-027/D-051).
+    # Sole provider: Anthropic Claude (requires ANTHROPIC_API_KEY). Ollama removed —
+    # it did not perform reliably on the M1. cheap tier = Haiku for repetitive daily
+    # summaries; premium tier = Sonnet for complex synthesis (market brief).
+    ai_provider: str = Field(default="anthropic")
+    ai_model_cheap: str = Field(default="claude-haiku-4-5-20251001")
+    ai_model_premium: str = Field(default="claude-sonnet-4-6")
     ai_daily_call_ceiling: int = Field(default=500)
     ai_max_regen: int = Field(default=2)
     ai_model_tier_default: str = Field(default="cheap")
-    # Legacy: kept for backwards compat; new code uses ai_ollama_model_cheap/premium.
-    model_version: str = Field(default="gemma4:4b")
+    # Legacy alias retained for audit records; mirrors the cheap-tier model id.
+    model_version: str = Field(default="claude-haiku-4-5-20251001")
 
-    # Data source selection + fetch window.
-    active_data_source: str = Field(default="yfinance")
+    # Data source selection + fetch window. Kite is the sole source (D-058).
+    active_data_source: str = Field(default="kite")
     history_period: str = Field(default="max")
+
+    # ── Zerodha Kite Connect (sole market-data source, D-058) ──────────────
+    # API credentials from the developers.kite.trade "Connect" app.
+    kite_api_key: str | None = Field(default=None, alias="KITE_API_KEY")
+    kite_api_secret: str | None = Field(default=None, alias="KITE_API_SECRET")
+    # Daily access token — auto-refreshed by app/data/kite_auth.py.
+    kite_access_token: str | None = Field(default=None, alias="KITE_ACCESS_TOKEN")
+    # Callback flow (fallback): redirect registered on the Kite app.
+    kite_redirect_url: str = Field(default="http://127.0.0.1:8000/kite/callback")
+    kite_callback_host: str = Field(default="127.0.0.1")
+    kite_callback_port: int = Field(default=8000)
+    # Automated unattended login (primary flow): TOTP-based 2FA (D-058 option B).
+    kite_user_id: str | None = Field(default=None, alias="KITE_USER_ID")
+    kite_password: str | None = Field(default=None, alias="KITE_PASSWORD")
+    kite_totp_secret: str | None = Field(default=None, alias="KITE_TOTP_SECRET")
+    # Historical fetch: daily candles, chunked to respect Kite's per-request span.
+    kite_history_chunk_days: int = Field(default=1800)
+    kite_exchange: str = Field(default="NSE")
+    # Corporate-proxy support: if your network TLS-inspects Kite (e.g. a Sophos/Zscaler
+    # appliance re-signs the cert), point this at a PEM bundle that includes the proxy CA.
+    # Applied to both the kiteconnect (requests) and kite_auth (httpx) HTTP clients.
+    # NEVER disable verification — supply the CA instead.
+    kite_ca_bundle: str | None = Field(default=None, alias="KITE_CA_BUNDLE")
 
     # Auth (M7, docs/23 §1) — HS256 secret for local-first; swap to RS256 in prod.
     # Generated once at init; set SAAKSHYA_SECRET_KEY in .env for persistence.
@@ -74,6 +103,15 @@ class Settings(BaseSettings):
                 "ANTHROPIC_API_KEY is not set. Add it to your .env (see .env.example)."
             )
         return self.anthropic_api_key
+
+    def require_kite_api(self) -> tuple[str, str]:
+        """Return (api_key, api_secret) or fail loud — without leaking the secret."""
+        if not self.kite_api_key or not self.kite_api_secret:
+            raise RuntimeError(
+                "KITE_API_KEY / KITE_API_SECRET are not set. Add them to your .env "
+                "(see .env.example)."
+            )
+        return self.kite_api_key, self.kite_api_secret
 
 
 @lru_cache(maxsize=1)

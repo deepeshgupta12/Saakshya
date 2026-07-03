@@ -10,16 +10,12 @@ from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def client_with_stock():
-    import duckdb
-
+def client_with_stock(pg):
     from app.api import deps
     from app.main import app
-    from app.storage.duckdb import init_schema
     from app.storage.repository import OhlcBar, Repository, StockMaster
 
-    conn = duckdb.connect(":memory:")
-    init_schema(conn)
+    conn = pg
     repo = Repository(conn)
     sid = repo.upsert_stock(StockMaster(primary_symbol="TCS", name="Tata Consultancy"))
     repo.upsert_ohlc([OhlcBar(
@@ -32,7 +28,7 @@ def client_with_stock():
     conn.execute(
         "INSERT INTO technical_indicators "
         "(stock_id, session_date, as_of_version, indicator_version, rsi_14, sma_50) "
-        "VALUES (?, ?, 1, 1, 62.5, 3700.0)",
+        "VALUES (%s, %s, 1, 1, 62.5, 3700.0)",
         [sid, date(2024, 1, 2)],
     )
     repo.upsert_scanner_result(

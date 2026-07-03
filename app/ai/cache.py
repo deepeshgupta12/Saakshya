@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-import duckdb
+import psycopg
 
 from app.ai.payload import Payload
 
@@ -42,11 +42,11 @@ def _score_band(score: float | None) -> int:
 def get_cached(
     symbol: str,
     category: str,
-    conn: duckdb.DuckDBPyConnection,
+    conn: psycopg.Connection,
 ) -> str | None:
     """Return cached summary if one exists for (symbol, category), else None."""
     row = conn.execute(
-        "SELECT summary FROM ai_summary_cache WHERE symbol = ? AND signal_category = ?",
+        "SELECT summary FROM ai_summary_cache WHERE symbol = %s AND signal_category = %s",
         [symbol, category],
     ).fetchone()
     return str(row[0]) if row else None
@@ -59,14 +59,14 @@ def put_cached(
     audit_id:      str,
     as_of:         str,
     model_version: str,
-    conn:          duckdb.DuckDBPyConnection,
+    conn:          psycopg.Connection,
 ) -> None:
     """Upsert a summary into the cache for (symbol, category)."""
     conn.execute(
         """
         INSERT INTO ai_summary_cache
             (symbol, signal_category, summary, audit_id, as_of, model_version, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, now())
+        VALUES (%s, %s, %s, %s, %s, %s, now())
         ON CONFLICT (symbol, signal_category) DO UPDATE SET
             summary       = excluded.summary,
             audit_id      = excluded.audit_id,

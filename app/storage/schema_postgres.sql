@@ -1,0 +1,267 @@
+-- Saakshya TimescaleDB (Postgres) schema — the analytics core (D-059).
+-- Ported from the retired DuckDB schema.sql + M2/M3b/M4/news migrations.
+-- Principles unchanged: raw + adjusted series, as-of/point-in-time versioning,
+-- survivorship preserved (delisted/merged never hard-deleted). SPEC §6.1–6.3.
+-- User/app documents (portfolios, alerts, strategies, watchlists, auth) live in MongoDB.
+
+CREATE EXTENSION IF NOT EXISTS timescaledb;
+
+CREATE SEQUENCE IF NOT EXISTS seq_sector_id START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_industry_id START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_stock_id START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_exch_sym_id START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_corp_action_id START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_dq_log_id START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_scanner_result_id START 1;
+
+CREATE TABLE IF NOT EXISTS sector_master (
+    sector_id   BIGINT DEFAULT nextval('seq_sector_id') PRIMARY KEY,
+    name        VARCHAR NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS industry_master (
+    industry_id BIGINT DEFAULT nextval('seq_industry_id') PRIMARY KEY,
+    name        VARCHAR NOT NULL UNIQUE,
+    sector_id   BIGINT
+);
+
+-- Survivorship: status may be 'listed' | 'delisted' | 'merged'; rows are NEVER deleted.
+CREATE TABLE IF NOT EXISTS stock_master (
+    stock_id        BIGINT DEFAULT nextval('seq_stock_id') PRIMARY KEY,
+    isin            VARCHAR,
+    primary_symbol  VARCHAR NOT NULL UNIQUE,
+    name            VARCHAR NOT NULL,
+    sector_id       BIGINT REFERENCES sector_master(sector_id),
+    parent_isin     VARCHAR,
+    status          VARCHAR NOT NULL DEFAULT 'listed',
+    listed_on       DATE,
+    delisted_on     DATE,
+    created_at      TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS exchange_symbols (
+    id          BIGINT DEFAULT nextval('seq_exch_sym_id') PRIMARY KEY,
+    stock_id    BIGINT NOT NULL,
+    exchange    VARCHAR NOT NULL,
+    symbol      VARCHAR NOT NULL,
+    series      VARCHAR,
+    valid_from  DATE NOT NULL DEFAULT DATE '1990-01-01',
+    valid_to    DATE,
+    UNIQUE (exchange, symbol, valid_from)
+);
+
+-- EOD bars: BOTH raw and adjusted, point-in-time versioned → Timescale hypertable.
+CREATE TABLE IF NOT EXISTS daily_ohlc (
+    stock_id      BIGINT NOT NULL,
+    session_date  DATE NOT NULL,
+    open_raw      DOUBLE PRECISION NOT NULL,
+    high_raw      DOUBLE PRECISION NOT NULL,
+    low_raw       DOUBLE PRECISION NOT NULL,
+    close_raw     DOUBLE PRECISION NOT NULL,
+    open_adj      DOUBLE PRECISION NOT NULL,
+    high_adj      DOUBLE PRECISION NOT NULL,
+    low_adj       DOUBLE PRECISION NOT NULL,
+    close_adj     DOUBLE PRECISION NOT NULL,
+    volume        BIGINT NOT NULL,
+    delivery_qty  BIGINT,
+    delivery_pct  DOUBLE PRECISION,
+    is_adjusted   BOOLEAN NOT NULL DEFAULT FALSE,
+    adj_factor    DOUBLE PRECISION NOT NULL DEFAULT 1.0,
+    source        VARCHAR NOT NULL,
+    as_of_version INTEGER NOT NULL DEFAULT 1,
+    reconciled    BOOLEAN NOT NULL DEFAULT FALSE,
+    ingested_at   TIMESTAMP DEFAULT now(),
+    PRIMARY KEY (stock_id, session_date, as_of_version)
+);
+SELECT create_hypertable('daily_ohlc', 'session_date', if_not_exists => TRUE);
+
+CREATE TABLE IF NOT EXISTS index_ohlc (
+    index_symbol  VARCHAR NOT NULL,
+    session_date  DATE NOT NULL,
+    open          DOUBLE PRECISION NOT NULL,
+    high          DOUBLE PRECISION NOT NULL,
+    low           DOUBLE PRECISION NOT NULL,
+    close         DOUBLE PRECISION NOT NULL,
+    volume        BIGINT,
+    source        VARCHAR NOT NULL,
+    as_of_version INTEGER NOT NULL DEFAULT 1,
+    ingested_at   TIMESTAMP DEFAULT now(),
+    PRIMARY KEY (index_symbol, session_date, as_of_version)
+);
+SELECT create_hypertable('index_ohlc', 'session_date', if_not_exists => TRUE);
+
+-- Indicator columns folded in from the M2 migration.
+CREATE TABLE IF NOT EXISTS technical_indicators (
+    stock_id          BIGINT NOT NULL,
+    session_date      DATE NOT NULL,
+    indicator_version INTEGER NOT NULL DEFAULT 1,
+    as_of_version     INTEGER NOT NULL DEFAULT 1,
+    computed_at       TIMESTAMP DEFAULT now(),
+    rsi_14 DOUBLE PRECISION, sma_20 DOUBLE PRECISION, sma_50 DOUBLE PRECISION,
+    sma_200 DOUBLE PRECISION, ema_21 DOUBLE PRECISION, atr_14 DOUBLE PRECISION,
+    macd_line DOUBLE PRECISION, macd_signal DOUBLE PRECISION,
+    bb_upper DOUBLE PRECISION, bb_mid DOUBLE PRECISION, bb_lower DOUBLE PRECISION,
+    adx_14 DOUBLE PRECISION, stoch_rsi_k DOUBLE PRECISION, stoch_rsi_d DOUBLE PRECISION,
+    "pivot" DOUBLE PRECISION, pivot_r1 DOUBLE PRECISION, pivot_r2 DOUBLE PRECISION,
+    pivot_s1 DOUBLE PRECISION, pivot_s2 DOUBLE PRECISION, vwap DOUBLE PRECISION,
+    ret_5d DOUBLE PRECISION, ret_21d DOUBLE PRECISION, ret_63d DOUBLE PRECISION,
+    ret_126d DOUBLE PRECISION, volume_ratio_20 DOUBLE PRECISION,
+    rel_strength_63d DOUBLE PRECISION,
+    PRIMARY KEY (stock_id, session_date, indicator_version, as_of_version)
+);
+SELECT create_hypertable('technical_indicators', 'session_date', if_not_exists => TRUE);
+
+CREATE TABLE IF NOT EXISTS corporate_actions (
+    action_id       BIGINT DEFAULT nextval('seq_corp_action_id') PRIMARY KEY,
+    stock_id        BIGINT NOT NULL,
+    action_type     VARCHAR NOT NULL,
+    ex_date         DATE NOT NULL,
+    ratio_from      DOUBLE PRECISION,
+    ratio_to        DOUBLE PRECISION,
+    dividend_amount DOUBLE PRECISION,
+    new_symbol      VARCHAR,
+    factor          DOUBLE PRECISION,
+    source          VARCHAR NOT NULL,
+    reconciled      BOOLEAN NOT NULL DEFAULT FALSE,
+    as_of_version   INTEGER NOT NULL DEFAULT 1,
+    ingested_at     TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS data_quality_logs (
+    log_id       BIGINT DEFAULT nextval('seq_dq_log_id') PRIMARY KEY,
+    job_id       VARCHAR NOT NULL,
+    source       VARCHAR NOT NULL,
+    session_date DATE,
+    stock_id     BIGINT,
+    check_type   VARCHAR NOT NULL,
+    severity     VARCHAR NOT NULL,
+    status       VARCHAR NOT NULL,
+    detail       VARCHAR,
+    created_at   TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS scanner_results (
+    result_id         BIGINT DEFAULT nextval('seq_scanner_result_id') PRIMARY KEY,
+    scanner           VARCHAR NOT NULL,
+    stock_id          BIGINT NOT NULL,
+    session_date      DATE NOT NULL,
+    composite_score   DOUBLE PRECISION,
+    sub_scores        VARCHAR,
+    facts             VARCHAR,
+    signal_tags       VARCHAR,
+    risk_flags        VARCHAR,
+    data_confidence   VARCHAR NOT NULL DEFAULT 'MEDIUM',
+    weights_version   VARCHAR NOT NULL DEFAULT 'weights-v1-hypothesis',
+    validation_status VARCHAR NOT NULL DEFAULT 'PENDING_M3B',
+    as_of_version     INTEGER NOT NULL DEFAULT 1,
+    engine_version    VARCHAR NOT NULL DEFAULT '1.0.0',
+    computed_at       TIMESTAMP DEFAULT now(),
+    UNIQUE (scanner, stock_id, session_date, as_of_version)
+);
+
+CREATE TABLE IF NOT EXISTS scanner_definitions (
+    id            VARCHAR NOT NULL PRIMARY KEY,
+    name          VARCHAR NOT NULL,
+    owner_user_id VARCHAR,
+    plan_required VARCHAR,
+    weights       VARCHAR,
+    version       INTEGER NOT NULL DEFAULT 1,
+    validated     BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMP DEFAULT now()
+);
+
+-- AI generation audit log: append-only (docs/14 §7, SPEC §6.6).
+CREATE TABLE IF NOT EXISTS ai_audit_log (
+    audit_id              VARCHAR NOT NULL PRIMARY KEY,
+    timestamp             TIMESTAMP NOT NULL DEFAULT now(),
+    intent                VARCHAR NOT NULL,
+    agent                 VARCHAR,
+    prompt_id             VARCHAR NOT NULL,
+    prompt_version        VARCHAR NOT NULL,
+    model_tier            VARCHAR NOT NULL,
+    model_id              VARCHAR NOT NULL,
+    payload_hash          VARCHAR NOT NULL,
+    payload_json          VARCHAR NOT NULL,
+    raw_output            VARCHAR,
+    grounding_report_json VARCHAR,
+    guardrail_report_json VARCHAR,
+    compliance_decision   VARCHAR NOT NULL DEFAULT 'PASS',
+    user_visible_output   VARCHAR,
+    suppressed            BOOLEAN NOT NULL DEFAULT FALSE,
+    degraded              BOOLEAN NOT NULL DEFAULT FALSE,
+    as_of_version         VARCHAR,
+    tokens_in             INTEGER DEFAULT 0,
+    tokens_out            INTEGER DEFAULT 0,
+    cost_usd              DOUBLE PRECISION DEFAULT 0.0
+);
+
+CREATE TABLE IF NOT EXISTS ai_summary_cache (
+    symbol          VARCHAR NOT NULL,
+    signal_category VARCHAR NOT NULL,
+    summary         VARCHAR NOT NULL,
+    audit_id        VARCHAR NOT NULL,
+    as_of           DATE NOT NULL,
+    model_version   VARCHAR NOT NULL,
+    created_at      TIMESTAMP DEFAULT now(),
+    PRIMARY KEY (symbol, signal_category)
+);
+
+CREATE TABLE IF NOT EXISTS ai_daily_calls (
+    call_date  DATE NOT NULL PRIMARY KEY,
+    call_count INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS market_brief_cache (
+    brief_date    DATE NOT NULL PRIMARY KEY,
+    brief_text    VARCHAR NOT NULL,
+    audit_id      VARCHAR,
+    model_version VARCHAR,
+    created_at    TIMESTAMP DEFAULT now()
+);
+
+-- News pipeline (M7).
+CREATE TABLE IF NOT EXISTS news_sources (
+    source_id         VARCHAR NOT NULL PRIMARY KEY,
+    name              VARCHAR NOT NULL,
+    base_url          VARCHAR NOT NULL,
+    feed_url          VARCHAR NOT NULL,
+    feed_type         VARCHAR NOT NULL DEFAULT 'rss',
+    reliability       DOUBLE PRECISION NOT NULL DEFAULT 0.7,
+    redistribution_ok BOOLEAN NOT NULL DEFAULT FALSE,
+    active            BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at        TIMESTAMP DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS news_items (
+    article_id    VARCHAR NOT NULL PRIMARY KEY,
+    source_id     VARCHAR NOT NULL,
+    headline      VARCHAR NOT NULL,
+    body          VARCHAR,
+    url           VARCHAR NOT NULL,
+    published_at  TIMESTAMP,
+    ingested_at   TIMESTAMP DEFAULT now(),
+    cluster_id    VARCHAR,
+    as_of_version INTEGER NOT NULL DEFAULT 1
+);
+
+CREATE TABLE IF NOT EXISTS news_stock_links (
+    link_id             VARCHAR NOT NULL PRIMARY KEY,
+    article_id          VARCHAR NOT NULL,
+    symbol              VARCHAR NOT NULL,
+    link_confidence     DOUBLE PRECISION NOT NULL,
+    is_surfaced         BOOLEAN NOT NULL DEFAULT FALSE,
+    sentiment_label     VARCHAR,
+    sentiment_score     DOUBLE PRECISION,
+    sentiment_model_ver VARCHAR NOT NULL DEFAULT '0.1-heuristic',
+    impact_score        DOUBLE PRECISION,
+    category            VARCHAR,
+    created_at          TIMESTAMP DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_daily_ohlc_stock_date ON daily_ohlc (stock_id, session_date);
+CREATE INDEX IF NOT EXISTS idx_corp_actions_stock ON corporate_actions (stock_id, ex_date);
+CREATE INDEX IF NOT EXISTS idx_scanner_results_date ON scanner_results (scanner, session_date);
+CREATE INDEX IF NOT EXISTS idx_ai_audit_log_timestamp ON ai_audit_log (timestamp);
+CREATE INDEX IF NOT EXISTS idx_ai_audit_log_symbol ON ai_audit_log (intent, agent);
+CREATE INDEX IF NOT EXISTS idx_news_items_published ON news_items (published_at);
+CREATE INDEX IF NOT EXISTS idx_news_links_symbol ON news_stock_links (symbol);
