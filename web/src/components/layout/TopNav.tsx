@@ -144,6 +144,24 @@ export function TopNav() {
               ⌘K
             </kbd>
           </button>
+
+          {/* Auth actions — surfaced for signed-out users (docs/08 auth screens) */}
+          {!isAuthenticated() && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Link
+                href="/login"
+                className="hidden sm:inline-flex min-h-[36px] items-center rounded-(--radius-md) px-3 py-1.5 text-sm text-(--text-secondary) transition-colors hover:bg-(--surface-3) hover:text-(--text-primary)"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/signup"
+                className="inline-flex min-h-[36px] items-center rounded-(--radius-md) bg-(--accent) px-3 py-1.5 text-sm font-medium text-(--text-inverse) transition-colors hover:bg-(--accent-strong)"
+              >
+                Start free
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Mobile bottom border indicator for active route */}

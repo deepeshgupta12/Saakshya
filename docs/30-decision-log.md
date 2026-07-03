@@ -355,6 +355,15 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 - **Impact:** `app/storage/*` (new mongodb + timescale clients, rewritten repository; delete `duckdb.py`), all pipeline/scanner/router modules (remove DuckDB `conn` threading), `docker-compose`, `docs/09`, `docs/11`, SPEC §9. HIGH blast radius.
 - **Status:** Accepted (implemented in Phase 3)
 
+### D-060 — Home/landing page at `/` with a subtle 3D hero (React Three Fiber)
+- **Date:** 2026-07-03
+- **Context:** `/` merely `redirect()`-ed to `/market` — there was no home page, no 3D, and no visible entry to login/signup (user feedback). docs/08 §1 specifies a real evidence-led landing.
+- **Alternatives considered:** Keep the redirect (rejected — no acquisition surface, off-spec); CSS-only hero (kept as the `prefers-reduced-motion` fallback); heavy Spline/embedded 3D (rejected — perf + self-hosting).
+- **Final decision:** `web/app/page.tsx` renders `Landing` (`web/src/components/marketing/`): evidence-led hero, feature bands, a descriptive scanner-preview (score + reasons, never a buy call), CTAs to `/signup` + `/scanners/momentum`, and `NotAdviceBanner`. A **subtle 3D data-orb** (`@react-three/fiber` v9 + `drei` v10 + three, React-19 compatible) anchors the hero — calm rotation, indigo/AI-violet, `pointer-events:none`, loaded client-only (`ssr:false`) and **replaced by a static gradient under `prefers-reduced-motion`**. `TopNav` now shows Log in / Start free for signed-out users. **3D is deliberately hero-only** — docs/07 forbids motion/3D that harms readability, performance, or financial seriousness on data-dense screens.
+- **Owner:** Frontend
+- **Impact:** `web/app/page.tsx`, `web/src/components/marketing/{Landing,HeroCanvas}.tsx`, `web/src/components/layout/TopNav.tsx`, `web/package.json` (+three/@react-three); type-clean, production build green.
+- **Status:** Accepted (Phase 4)
+
 ---
 
 ## 2. Decision index
@@ -420,6 +429,7 @@ Each decision is recorded as a section for readability; the summary table (§2) 
 | D-057 | 2026-07-02 | Anthropic Claude is the sole AI provider (Haiku cheap / Sonnet premium); Ollama/Gemma removed — did not perform on M1; `LLMProvider` Protocol retained | AI/ML + Eng | `app/config.py`, `app/ai/provider.py`, `docs/14` | Accepted (supersedes D-027, D-051) |
 | D-058 | 2026-07-02 | Zerodha Kite Connect is the sole market-data source; automated daily token flow via `http://127.0.0.1:8000/kite/callback`; yfinance/Bhavcopy removed | Data/Backend | `app/data/`, `docs/12`, SPEC §8 | Accepted (Phase 2) |
 | D-059 | 2026-07-02 | Polyglot persistence: TimescaleDB (time-series) + MongoDB (documents); DuckDB dropped; both run locally via docker-compose | Data/Backend | `app/storage/`, `docs/09`, `docs/11`, SPEC §9 | Accepted (Phase 3) |
+| D-060 | 2026-07-03 | Home/landing page at `/` with a subtle React-Three-Fiber 3D hero (reduced-motion → static gradient); login/signup surfaced in TopNav; 3D is hero-only per docs/07 | Frontend | `web/app/page.tsx`, `web/src/components/marketing/*`, `TopNav.tsx` | Accepted (Phase 4) |
 
 ---
 

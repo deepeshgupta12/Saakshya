@@ -4,6 +4,8 @@
 
 **Maps to:** Roadmap V1 (UI) · SPEC Phase 1 · Local milestone M6
 **Status:** Complete (M6 — 2026-06-30)   |   **Regulatory mode:** A
+
+> **Post-M6 addition (2026-07-03, D-060):** the public **home/landing page at `/`** (`web/app/page.tsx` → `web/src/components/marketing/Landing.tsx`) is built per [08 §1](../08-screen-by-screen-documentation.md) — evidence-led hero, feature bands, descriptive scanner preview, CTAs to `/signup` + `/scanners/momentum`, `NotAdviceBanner`. A subtle **3D data-orb** (`@react-three/fiber`) anchors the hero, loaded client-only with a **static gradient fallback for `prefers-reduced-motion`**; 3D is hero-only (docs/07 forbids motion that harms data-screen legibility). `TopNav` now surfaces **Log in / Start free** for signed-out users. Type-clean; production build green. `/` previously just `redirect()`-ed to `/market`.
 **Prerequisites:** [05-api-and-pipeline.md](05-api-and-pipeline.md) (M5 endpoints live) · [04-ai-explanation-layer.md](04-ai-explanation-layer.md) (grounded AI + blocked-phrase export)
 
 ## Overview

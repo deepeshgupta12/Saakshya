@@ -69,7 +69,7 @@ export function BreadthPanel({ summary }: { summary: MarketSummary }) {
 function CountUpStat({
   label, value, color, Icon,
 }: {
-  label: string; value: number; color: string; Icon?: React.ElementType;
+  label: string; value: number; color: string; Icon?: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }) {
   const { reduced } = useMotion();
   const mv = useMotionValue(reduced ? value : 0);
