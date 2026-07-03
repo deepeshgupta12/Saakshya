@@ -39,7 +39,7 @@ _IND_COLS = (
     "vwap, ret_5d, ret_21d, ret_63d, ret_126d, volume_ratio_20, rel_strength_63d"
 )
 
-_IND_PLACEHOLDERS = ", ".join(["?"] * 30)
+_IND_PLACEHOLDERS = ", ".join(["%s"] * 30)
 
 _IND_UPDATE = (
     "rsi_14=excluded.rsi_14, sma_20=excluded.sma_20, sma_50=excluded.sma_50, "
@@ -107,7 +107,7 @@ def compute_all(
 def _load_bench(repo: Repository, symbol: str) -> pd.Series:
     """Load benchmark (Nifty 50) adjusted closes as a date-indexed pd.Series."""
     raw = repo._conn.execute(
-        "SELECT session_date, close FROM index_ohlc WHERE index_symbol=? "
+        "SELECT session_date, close FROM index_ohlc WHERE index_symbol=%s "
         "ORDER BY session_date ASC",
         [symbol],
     ).fetchall()
@@ -200,10 +200,12 @@ def _compute_stock(
             ret5_l[i], ret21_l[i], ret63_l[i], ret126_l[i], volr20_l[i], rs63_l[i],
         ])
 
-    repo._conn.executemany(
-        f"INSERT INTO technical_indicators ({_IND_COLS}) VALUES ({_IND_PLACEHOLDERS}) "
-        f"ON CONFLICT (stock_id, session_date, indicator_version, as_of_version) "
-        f"DO UPDATE SET {_IND_UPDATE}",
-        params,
-    )
+    # psycopg's Connection has no executemany(); use a cursor (matches Repository).
+    with repo._conn.cursor() as cur:
+        cur.executemany(
+            f"INSERT INTO technical_indicators ({_IND_COLS}) VALUES ({_IND_PLACEHOLDERS}) "
+            f"ON CONFLICT (stock_id, session_date, indicator_version, as_of_version) "
+            f"DO UPDATE SET {_IND_UPDATE}",
+            params,
+        )
     return len(params)
