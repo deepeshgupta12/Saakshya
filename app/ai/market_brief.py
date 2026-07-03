@@ -41,58 +41,65 @@ End every brief with: "Not investment advice. Evidence sourced from EOD data."\
 
 def _build_brief_payload(conn: psycopg.Connection, as_of: date) -> dict[str, Any] | None:
     """Assemble a structured data payload for the brief from DB aggregates."""
-    # Advance / decline.
+    # Advance / decline — TimescaleDB schema: daily_ohlc keys on stock_id + close_adj
+    # (no symbol/close columns); latest as_of_version.
     ad = conn.execute("""
         WITH prev AS (
-            SELECT symbol, close,
-                   LAG(close) OVER (PARTITION BY symbol ORDER BY session_date) AS prev_close
+            SELECT stock_id, session_date, close_adj,
+                   LAG(close_adj) OVER (PARTITION BY stock_id ORDER BY session_date) AS prev_close
             FROM daily_ohlc
-            WHERE session_date <= %s
+            WHERE session_date <= %s AND as_of_version = 1
         )
         SELECT
-            COUNT(*) FILTER (WHERE close > prev_close)  AS advances,
-            COUNT(*) FILTER (WHERE close < prev_close)  AS declines,
-            COUNT(*) FILTER (WHERE close = prev_close AND prev_close IS NOT NULL) AS unchanged
+            COUNT(*) FILTER (WHERE close_adj > prev_close)  AS advances,
+            COUNT(*) FILTER (WHERE close_adj < prev_close)  AS declines,
+            COUNT(*) FILTER (WHERE close_adj = prev_close AND prev_close IS NOT NULL) AS unchanged
         FROM prev WHERE session_date = %s
     """, [as_of, as_of]).fetchone()
     if ad is None or (ad[0] == 0 and ad[1] == 0):
         return None
     advances, declines, unchanged = int(ad[0]), int(ad[1]), int(ad[2])
 
-    # Top 5 gainers and losers by % change.
+    # Top movers by % change — join stock_master (name) + sector_master (sector).
+    # Outer subquery so ORDER BY can reference the chg_pct alias (Postgres rule);
+    # ROUND needs a numeric cast (no ROUND(double, int) in Postgres).
     movers = conn.execute("""
-        WITH ranked AS (
-            SELECT
-                sm.primary_symbol AS symbol,
-                sm.company_name,
-                sm.sector,
-                o.close,
-                LAG(o.close) OVER (PARTITION BY o.symbol ORDER BY o.session_date) AS prev_close
-            FROM daily_ohlc o
-            JOIN stock_master sm ON sm.primary_symbol = o.symbol
-            WHERE o.session_date <= %s
-        )
-        SELECT symbol, company_name, sector,
-               ROUND(100.0 * (close - prev_close) / NULLIF(prev_close, 0), 2) AS chg_pct
-        FROM ranked
-        WHERE session_date = %s AND prev_close IS NOT NULL
+        SELECT symbol, company_name, sector, chg_pct FROM (
+            SELECT symbol, company_name, sector,
+                   ROUND(CAST(100.0 * (close_adj - prev_close) / NULLIF(prev_close, 0) AS numeric), 2) AS chg_pct
+            FROM (
+                SELECT
+                    sm.primary_symbol AS symbol,
+                    sm.name           AS company_name,
+                    sec.name          AS sector,
+                    o.session_date,
+                    o.close_adj,
+                    LAG(o.close_adj) OVER (PARTITION BY o.stock_id ORDER BY o.session_date) AS prev_close
+                FROM daily_ohlc o
+                JOIN stock_master sm ON sm.stock_id = o.stock_id
+                LEFT JOIN sector_master sec ON sec.sector_id = sm.sector_id
+                WHERE o.session_date <= %s AND o.as_of_version = 1
+            ) ranked
+            WHERE session_date = %s AND prev_close IS NOT NULL
+        ) m
         ORDER BY ABS(chg_pct) DESC
         LIMIT 10
     """, [as_of, as_of]).fetchall()
 
     # Sector strength (avg change per sector).
     sectors = conn.execute("""
-        WITH ranked AS (
+        SELECT sector, ROUND(CAST(AVG(100.0 * (close_adj - prev_close) / NULLIF(prev_close, 0)) AS numeric), 2) AS avg_chg
+        FROM (
             SELECT
-                sm.sector,
-                o.close,
-                LAG(o.close) OVER (PARTITION BY o.symbol ORDER BY o.session_date) AS prev_close
+                sec.name AS sector,
+                o.session_date,
+                o.close_adj,
+                LAG(o.close_adj) OVER (PARTITION BY o.stock_id ORDER BY o.session_date) AS prev_close
             FROM daily_ohlc o
-            JOIN stock_master sm ON sm.primary_symbol = o.symbol
-            WHERE o.session_date <= %s AND sm.sector IS NOT NULL
-        )
-        SELECT sector, ROUND(AVG(100.0 * (close - prev_close) / NULLIF(prev_close, 0)), 2) AS avg_chg
-        FROM ranked
+            JOIN stock_master sm ON sm.stock_id = o.stock_id
+            JOIN sector_master sec ON sec.sector_id = sm.sector_id
+            WHERE o.session_date <= %s AND o.as_of_version = 1
+        ) ranked
         WHERE session_date = %s AND prev_close IS NOT NULL
         GROUP BY sector
         ORDER BY avg_chg DESC
@@ -105,10 +112,14 @@ def _build_brief_payload(conn: psycopg.Connection, as_of: date) -> dict[str, Any
         "decline_count": declines,
         "unchanged":     unchanged,
         "top_movers":    [
-            {"symbol": r[0], "company_name": r[1], "sector": r[2], "change_pct": r[3]}
+            {"symbol": r[0], "company_name": r[1], "sector": r[2],
+             "change_pct": float(r[3]) if r[3] is not None else None}
             for r in movers
         ],
-        "sector_strength": [{"sector": r[0], "avg_change_pct": r[1]} for r in sectors],
+        "sector_strength": [
+            {"sector": r[0], "avg_change_pct": float(r[1]) if r[1] is not None else None}
+            for r in sectors
+        ],
     }
 
 

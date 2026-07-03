@@ -78,7 +78,7 @@ def _sector_rows(conn: Any, as_of: Any) -> list[dict[str, Any]]:
     SELECT
         sec.sector_id,
         sec.name,
-        ROUND(AVG(sc.chg_pct), 2)                           AS avg_change_pct,
+        ROUND(CAST(AVG(sc.chg_pct) AS numeric), 2)          AS avg_change_pct,
         COUNT(sc.chg_pct)                                   AS member_count,
         ROUND(
             100.0 * SUM(CASE WHEN sc.chg_pct >= 0 THEN 1 ELSE 0 END)
@@ -154,7 +154,7 @@ def get_sector_detail(
                 sm.primary_symbol AS symbol,
                 sm.name,
                 CASE WHEN p.prev_close IS NOT NULL AND p.prev_close <> 0
-                     THEN ROUND((o.close_adj - p.prev_close) / p.prev_close * 100.0, 2)
+                     THEN ROUND(CAST((o.close_adj - p.prev_close) / p.prev_close * 100.0 AS numeric), 2)
                      ELSE NULL END AS chg_pct
             FROM daily_ohlc o
             JOIN stock_master sm ON sm.stock_id = o.stock_id
