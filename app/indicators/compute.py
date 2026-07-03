@@ -65,7 +65,7 @@ class ComputeSummary:
 
 
 def _nullify(val: object) -> float | None:
-    """Convert NaN/None to Python None; else return float (safe for DuckDB binding)."""
+    """Convert NaN/None to Python None; else return float (safe for DB binding)."""
     if val is None:
         return None
     try:

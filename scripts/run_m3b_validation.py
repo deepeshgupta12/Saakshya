@@ -197,7 +197,7 @@ def _apply_to_db(verdict: GateVerdict) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run M3b score validation")
-    parser.add_argument("--period", default="5y", help="yfinance period (default: 5y)")
+    parser.add_argument("--period", default="5y", help="EOD history window (default: 5y)")
     parser.add_argument("--config-version", default="v1", help="Gate config version (default: v1)")
     args = parser.parse_args()
     main(period=args.period, config_version=args.config_version)

@@ -234,7 +234,7 @@ def run_alert_evaluation(
     candidates:    list[dict[str, Any]],
     as_of:         date,
     prior_state:   dict[str, Any] | None = None,
-    conn:          Any = None,          # DuckDB connection for dedup persistence
+    conn:          Any = None,          # Mongo db for dedup persistence
 ) -> list[AlertEvent]:
     """Main EOD alert evaluation loop (docs/17 §7 flowchart).
 

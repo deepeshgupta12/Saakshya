@@ -33,14 +33,15 @@ Saakshya/
     ├── 01-product-overview.md … 30-decision-log.md
 ```
 
-Application code is **not yet written** — this repository currently holds the complete product/engineering documentation. The build follows a **local-first plan** (one Apple-Silicon Mac, DuckDB, vectorized indicators, Claude Haiku) to validate the Mode-A core before any cloud spend; see [SPEC.md §12](SPEC.md) and [docs/02 roadmap](docs/02-product-roadmap.md).
+Application code is **implemented through the M7 milestone** (data pipeline, indicators, scanners, score validation, AI explanation layer, FastAPI API, and the Next.js web app) and validated by a green test suite. A **2026-07 stack reset** (decision log D-057/058/059) fixed the foundations: **AI** = Anthropic Claude only (Haiku/Sonnet); **market data** = Zerodha Kite Connect only; **storage** = polyglot **TimescaleDB (analytics core) + MongoDB (user/app documents)**, run locally via `docker compose`. See [SPEC.md §12](SPEC.md) and [docs/02 roadmap](docs/02-product-roadmap.md).
 
-## Planned stack
+## Stack
 
-- **Frontend:** Next.js (App Router) · React · TypeScript · Tailwind · Framer Motion · TanStack Query · Zustand · TradingView Lightweight Charts / ECharts
-- **Backend:** Python 3.11+ · FastAPI · Celery · Redis
-- **Data:** Polars/Pandas/NumPy (no TA-Lib) · PostgreSQL + TimescaleDB · ClickHouse · OpenSearch · pgvector · S3 — **local-first: DuckDB**
-- **AI:** LangGraph · LlamaIndex · Anthropic SDK (Claude Haiku `claude-haiku-4-5-20251001` default, provider-abstracted)
+- **Frontend:** Next.js (App Router) · React · TypeScript · Tailwind · Framer Motion · TanStack Query · Zustand · React Three Fiber (landing 3D) · TradingView Lightweight Charts / ECharts
+- **Backend:** Python 3.11+ · FastAPI · (Celery · Redis in production)
+- **Data:** Polars/Pandas/NumPy (no TA-Lib) · **Zerodha Kite Connect** (sole EOD source, D-058)
+- **Storage:** **TimescaleDB** (analytics core — OHLC/indicators/scanners/AI/news, hypertables) · **MongoDB** (user/app documents) — polyglot, D-059 (DuckDB retired)
+- **AI:** Anthropic SDK — **Claude Haiku** (`claude-haiku-4-5-20251001`) default / Sonnet premium, provider-abstracted (D-057)
 - **Infra:** AWS · Docker · Kubernetes · Terraform · GitHub Actions · OpenTelemetry/Prometheus/Grafana/Sentry
 
 ## Local-first quick start (target — once code lands at milestone M0)

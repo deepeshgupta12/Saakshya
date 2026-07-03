@@ -54,8 +54,8 @@ timeline
 |---|---|
 | **User value** | None directly — this is risk retirement. Indirectly: everything downstream is built on validated ground. |
 | **Dependencies** | Indian securities counsel; data-vendor negotiation; ANTHROPIC_API_KEY |
-| **Data dependencies** | yfinance (prototype) → NSE Bhavcopy + delivery file (authoritative EOD) → licensed vendor (production) behind one `DataSource` adapter |
-| **Engineering dependencies** | DuckDB single-file store; vectorized pandas/pandas-ta indicators (no TA-Lib); Claude Haiku via Anthropic SDK; grounding + guardrail prototype |
+| **Data dependencies** | Zerodha Kite Connect (sole EOD source, D-058) behind one `DataSource` adapter; licensed vendor swappable later |
+| **Engineering dependencies** | Polyglot TimescaleDB + MongoDB (D-059); vectorized pandas/pandas-ta indicators (no TA-Lib); Claude Haiku via Anthropic SDK; grounding + guardrail prototype |
 | **Acceptance criteria** | (1) Counsel confirms Mode-A scope and RA filing initiated. (2) Signed data contract with commercial redistribution rights. (3) **M3b: documented evidence ≥1 scanner score (start: momentum) tracks realized relative strength — or scoring is redesigned now.** (4) Indicators reconcile vs a 2nd source on a split/bonus test set. |
 
 See [Data ingestion](12-data-ingestion-and-market-data.md), [Scanner engine](13-scanner-engine-and-scoring.md), [ML & data science](15-machine-learning-and-data-science.md).

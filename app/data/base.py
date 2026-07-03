@@ -1,7 +1,7 @@
 """The single vendor-agnostic data seam (SPEC §8, docs/12 §3.1).
 
 Business logic (indicators, scanners, AI) depends ONLY on this interface, never on a
-concrete vendor — so swapping yfinance → NSE Bhavcopy → a licensed vendor touches no
+concrete vendor — so swapping Kite → a future licensed vendor touches no
 downstream code. Each source declares capabilities via ``supports(...)``; the
 publish-guard refuses commercial output from non-redistributable sources.
 """

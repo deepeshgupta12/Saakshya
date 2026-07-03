@@ -22,7 +22,7 @@ Related: [Scanner Engine & Scoring](13-scanner-engine-and-scoring.md) · [AI/LLM
 | Layer | Scope | Tooling | Runs in CI | Gate |
 |---|---|---|---|---|
 | **Unit** | Pure functions: indicators, scoring math, adjusters, utils | `pytest` (py), `vitest` (ts) | every PR | required |
-| **Integration** | Module boundaries: repo↔DB, pipeline stages, adapter↔storage | `pytest` + ephemeral DuckDB/Postgres | every PR | required |
+| **Integration** | Module boundaries: repo↔DB, pipeline stages, adapter↔storage | `pytest` + live Dockerized TimescaleDB + MongoDB | every PR | required |
 | **API contract** | Request/response shapes match [10-api-contracts.md](10-api-contracts.md) | `schemathesis` / OpenAPI diff | every PR | required |
 | **Scanner-logic (golden series)** | Scanner score + reasons + risk flags vs locked golden outputs | `pytest` + fixture series | every PR | required (critical) |
 | **Data-quality** | Missing candles, abnormal jumps, duplicates, delisted, volume sanity | `pytest` + Great-Expectations-style checks | every PR + nightly | required (critical) |
@@ -96,7 +96,7 @@ The **verification harness** (SPEC §6.6) is the gate:
 
 | Env | Data | AI | Purpose |
 |---|---|---|---|
-| **Local** | DuckDB fixtures (SPEC §12) | Claude Haiku, key via env | dev + M0–M6 milestones |
+| **Local** | TimescaleDB + MongoDB via docker-compose (D-059) | Claude Haiku, key via env | dev + M0–M6 milestones |
 | **CI** | Frozen fixtures only | mocked/replayed AI + harness | gate every PR |
 | **Staging** | Recent EOD snapshot (licensed feed) | real AI, real guardrails | **staging sign-off** before prod |
 | **Production** | Licensed feed | real AI + audit log | live |

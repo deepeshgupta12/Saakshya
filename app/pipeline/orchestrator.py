@@ -78,10 +78,10 @@ def run(
 
     Args:
         limit: cap universe size (useful for quick smoke runs).
-        period: yfinance history window (e.g. "1y", "max").
+        period: EOD history window (e.g. "1y", "max").
         stages: subset of ["ingest", "scan", "explain"]; None = all.
         as_of_version: DB point-in-time key (int); bump on restatement.
-        conn: optional open DuckDB connection (uses get_connection() otherwise).
+        conn: optional open TimescaleDB connection (uses get_connection() otherwise).
     """
     active_stages = stages or _ALL_STAGES
     run_id = f"ds-{datetime.now(tz=timezone.utc).strftime('%Y-%m-%dT%H:%M:%S')}"
@@ -102,7 +102,7 @@ def run(
             t0 = time.monotonic()
             log.info("[pipeline] stage=ingest starting")
             # Pass the same connection so ingest doesn't open a second write-conn
-            # to the same DuckDB file (only one writer allowed at a time).
+            # to the same DB (reuse the caller's connection).
             ingest_summary = run_ingest(limit=limit, period=period, conn=conn)
             elapsed = time.monotonic() - t0
             result.stages.append(StageResult(

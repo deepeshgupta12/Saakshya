@@ -5,7 +5,7 @@ Auth tiers (M7):
   - AuthUserDep    — real JWT validation; 401 if missing/expired (V2 gated routes).
   - OptionalAuthDep — JWT if present, None if absent (hydrates user context when logged in).
   - as_of resolver: returns latest session date from DB when not specified.
-  - DuckDB session: context-managed connection per request.
+  - TimescaleDB session (analytics) + MongoDB (docs): context-managed per request.
 """
 
 from __future__ import annotations

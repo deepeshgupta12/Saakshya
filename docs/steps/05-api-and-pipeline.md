@@ -6,6 +6,8 @@
 **Status:** Complete (M5 — 2026-06-30)   |   **Regulatory mode:** A
 **Prerequisites:** [01-local-mvp-foundation.md](01-local-mvp-foundation.md) · [02-indicators-and-scanners.md](02-indicators-and-scanners.md) · [03-scanner-score-validation.md](03-scanner-score-validation.md) · [04-ai-explanation-layer.md](04-ai-explanation-layer.md)
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** The pipeline `conn` is now a **psycopg (TimescaleDB)** connection and user/app routers use **MongoDB** (Decision log **D-057** (Claude-only AI), **D-058** (Kite-only data), **D-059** (polyglot TimescaleDB+MongoDB, DuckDB retired).); data source is **Kite** (D-058); AI is **Claude** (D-057). `app/storage/duckdb.py` was deleted.
+
 ## Overview
 Wire the validated local core into a runnable system: a **pipeline orchestrator** (`scripts/run_pipeline.py`) that runs ingest → compute → scan → explain over the local universe, and a **FastAPI app** (`app/api/`) that serves the M5 endpoints from [10-api-contracts.md](../10-api-contracts.md) under the standard response envelope. Every response carries `data`/`meta` with `as_of` + `data_confidence` (or the standard `error` object); AI summaries are served from cache when signals are unchanged ([SPEC §6.8](../../SPEC.md)); rate limiting protects the AI bucket. Locally, auth/plan-gating may be stubbed, but the **envelope, `as_of`, `data_confidence`, and the AI guardrail/grounding check remain non-negotiable** ([10 §0 local-first note](../10-api-contracts.md)).
 

@@ -5,6 +5,8 @@
 **Status:** Not started   |   **Regulatory mode:** A
 **Prerequisites:** None — this is the first file. Nothing broad is built until these gates pass.
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** The de-risk **data-source decision resolved to Zerodha Kite Connect** (Decision log **D-057** (Claude-only AI), **D-058** (Kite-only data), **D-059** (polyglot TimescaleDB+MongoDB, DuckDB retired).) — the "yfinance-prototype-only" constraint is now moot (Kite is the sole source). AI is Anthropic Claude only. See [docs/30](../30-decision-log.md).
+
 ## Overview
 Phase 0 retires the three product-killing assumptions **before** any broad feature work ([SPEC §12](../../SPEC.md)): (1) is Mode-A output legal-safe and is the RA track started; (2) can we get correct, adjusted historical data with redistribution rights; (3) does at least one scanner score carry signal. This file owns the **non-code gating work** (legal + data procurement) plus the **plan** for the score-validation spike. The spike is *executed and proven* later in [03-scanner-score-validation.md](03-scanner-score-validation.md) once indicators ([02-indicators-and-scanners.md](02-indicators-and-scanners.md)) exist; the foundation it runs on is built in [01-local-mvp-foundation.md](01-local-mvp-foundation.md).
 

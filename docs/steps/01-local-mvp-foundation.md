@@ -5,6 +5,8 @@
 **Status:** **M1 complete** (real NSE Bhavcopy adapter, corp-action master + adjuster, 2nd-source reconciliation — all validated; 59 tests pass).   |   **Regulatory mode:** A
 **Prerequisites:** [00-phase-0-derisk.md](00-phase-0-derisk.md) (mode confirmed; data-source decision; yfinance-prototype-only constraint).
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** Where this file says **DuckDB → read TimescaleDB+MongoDB**, and **yfinance/Bhavcopy → read Kite Connect**. Decision log **D-057** (Claude-only AI), **D-058** (Kite-only data), **D-059** (polyglot TimescaleDB+MongoDB, DuckDB retired). The M0/M1 gates were validated historically on DuckDB; the storage layer has since been ported (current schema: `app/storage/schema_postgres.sql` + `mongo_setup.py`; data source: `app/data/kite_source.py`).
+
 ## Overview
 Stands up the local-first skeleton on one Apple-Silicon Mac so every later file has a place to live: the [SPEC §12](../../SPEC.md) `app/` structure, a Python 3.11 venv + pinned deps + typed `config.py`, the **DuckDB** storage layer (schema + repository with **raw+adjusted + as-of** fields per [docs/11](../11-database-architecture.md)), the single **`DataSource` adapter interface**, the **yfinance adapter** (prototype-only; ~50 Nifty names, adjusted OHLCV), the **NSE Bhavcopy + delivery stub**, the symbol universe + normalization, and the first-class **corporate-actions master + adjustment** workstream. Indicators and scanners are built next in [02-indicators-and-scanners.md](02-indicators-and-scanners.md); the pipeline + API in [05-api-and-pipeline.md](05-api-and-pipeline.md).
 

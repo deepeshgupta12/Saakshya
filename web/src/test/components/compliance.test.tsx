@@ -73,7 +73,7 @@ describe("AiStockSummaryCard — grounded state", () => {
       summary: "TCS is trading above its 50-DMA with elevated volume.",
       cited_facts: [{ field: "sma_50", value: 3820, label: "SMA 50" }],
       risk_notes: [],
-      model_version: "qwen2.5:7b-instruct",
+      model_version: "claude-haiku-4-5-20251001",
       disclaimer: "Not investment advice.",
     };
     render(<AiStockSummaryCard aiSummary={summary} />);

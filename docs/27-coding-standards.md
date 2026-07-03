@@ -25,7 +25,7 @@ Mirrors the SPEC §12 project structure so local modules lift into services late
 saakshya/
   app/
     config.py            # env + settings (pydantic-settings)
-    data/                # DataSource adapters (yfinance, nse_bhavcopy), symbol universe
+    data/                # DataSource adapter (Kite Connect, D-058), symbol universe
     storage/             # DB connection, schema, repositories
     indicators/          # vectorized RSI, SMA/EMA, ATR, MACD, Bollinger, returns
     scanners/            # scanner scoring: score + reasons + risk flags

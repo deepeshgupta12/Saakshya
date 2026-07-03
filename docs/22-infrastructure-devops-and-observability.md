@@ -9,7 +9,7 @@ Related: [Admin Panel](20-admin-panel.md) · [Compliance & Guardrails](21-compli
 
 ## 0. Principles
 
-1. **Local-first graduates to cloud.** The Phase 0–1 MVP runs on one Apple-Silicon Mac with **DuckDB and no Docker day one** (SPEC §9, §12). This document is the **target** stack the local modules lift into once the three product-killing assumptions are retired (SPEC §12). Nothing here is built before then.
+1. **Local-first graduates to cloud.** The Phase 0–1 MVP runs on one Apple-Silicon Mac with **TimescaleDB + MongoDB via `docker compose`** (D-059; DuckDB retired) and **Zerodha Kite Connect** for data (D-058) (SPEC §9, §12). This document is the **target** cloud stack the local modules lift into once the three product-killing assumptions are retired (SPEC §12). Nothing here is built before then.
 2. **EOD-batch shaped infra (SPEC §8, §6.8).** The product is end-of-day; the critical path is an **overnight batch** that must finish inside its window. Infra is optimized for a nightly pipeline + low-latency daytime reads, **not** a 24/7 real-time trading system (that is the Phase-5 live tier).
 3. **AI spend is a first-class operational signal (SPEC §6.8).** A **hard monthly AI-spend ceiling** with alerting and graceful degradation is wired into observability, not bolted on.
 4. **Provider abstraction preserved (SPEC §9, §6.8).** Cheap model for repetitive summarization, premium model for complex synthesis — behind one interface, so infra and cost controls don't depend on a single provider.
@@ -118,7 +118,7 @@ module "observe"   { source = "./modules/observe"   env = var.env }  # Prometheu
 
 | Environment | Where | Data | Purpose |
 |---|---|---|---|
-| **local** | M1 Mac, DuckDB, no Docker (SPEC §12) | yfinance prototype + sample bhavcopy | Build/validate the Phase 0–1 core; retire the 3 product-killing assumptions. |
+| **local** | M1 Mac, TimescaleDB + MongoDB via docker-compose (D-059) | Kite Connect (D-058) | Build/validate the Phase 0–1 core; retire the 3 product-killing assumptions. |
 | **staging** | AWS, scaled-down mirror of prod | Licensed-vendor subset or sanitized | Pre-prod verification, eval/guardrail regression, EOD-batch dry runs. |
 | **production** | AWS, full stack | Licensed vendor (commercial redistribution rights, SPEC §8) | Live product. |
 
@@ -228,7 +228,7 @@ The local stack (SPEC §9, §12) maps 1:1 into this infra so modules lift into s
 
 | Local (M1, SPEC §12) | Cloud target |
 |---|---|
-| DuckDB single file | RDS PostgreSQL + TimescaleDB |
+| TimescaleDB + MongoDB (docker-compose, D-059) | RDS PostgreSQL/TimescaleDB + managed MongoDB |
 | Plain scripts / Makefile | Celery workers on ECS/EKS + EventBridge/SQS |
 | `docker-compose.yml` (provided, not run) | ECS/EKS + Terraform |
 | Anthropic SDK → Claude Haiku via env var | Provider abstraction; Secrets Manager for keys; cheap+premium routing (SPEC §6.8) |

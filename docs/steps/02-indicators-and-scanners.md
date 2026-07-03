@@ -5,6 +5,8 @@
 **Status:** Complete (M2+M3 implementation done — 90 tests green, ruff clean, mypy clean)   |   **Regulatory mode:** A
 **Prerequisites:** [01-local-mvp-foundation.md](01-local-mvp-foundation.md) (adjusted OHLCV in DuckDB, storage repository, corp-action adjuster). Score *validation* is [03-scanner-score-validation.md](03-scanner-score-validation.md); AI explanation is [04-ai-explanation-layer.md](04-ai-explanation-layer.md).
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** "Adjusted OHLCV in **DuckDB**" now means **TimescaleDB** (D-059); the indicator/scanner logic is unchanged. See [docs/30](../30-decision-log.md).
+
 ## Overview
 Builds the deterministic intelligence core: a **vectorized indicators module** (RSI, SMA 20/50/200, EMA, ATR, MACD, Bollinger, multi-window returns, volume ratio, relative strength) with golden-series unit tests + 2nd-source reconciliation, then the **rule-based scanners** (momentum, volume breakout, RSI, moving-average) that emit **0–100 composite + sub-scores + plain-language reasons + risk flags + the structured AI-explanation payload**. Output is **descriptive Mode-A** — no entry/target/SL, no "candidate" buy-leans, no "buy the breakout" ([SPEC §3](../../SPEC.md), [§5](../../SPEC.md), [docs/13 §0.4](../13-scanner-engine-and-scoring.md)). The composite uses the documented weights **flagged as `weights-v1-hypothesis`, `validationStatus=PENDING_M3B`** — the blended composite is gated on [03-scanner-score-validation.md](03-scanner-score-validation.md) before any UI.
 

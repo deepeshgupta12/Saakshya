@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = Field(default=None, alias="ANTHROPIC_API_KEY")
 
     # Storage (polyglot, D-059): TimescaleDB = analytics core; MongoDB = user/app docs.
-    # Both run locally via docker-compose. DuckDB is being retired.
+    # Both run locally via docker-compose (D-059). DuckDB retired.
     timescale_url: str = Field(
         default="postgresql://saakshya:saakshya@localhost:5544/saakshya",
         alias="SAAKSHYA_TIMESCALE_URL",

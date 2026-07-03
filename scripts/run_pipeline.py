@@ -23,7 +23,7 @@ def main() -> int:
     parser.add_argument("--limit", type=int, default=None,
                         help="cap number of universe symbols")
     parser.add_argument("--period", type=str, default=None,
-                        help="yfinance history period (e.g. max, 5y, 1y)")
+                        help="EOD history window (e.g. max, 5y, 1y)")
     parser.add_argument("--stages", nargs="+",
                         choices=["ingest", "scan", "explain"],
                         default=None,

@@ -5,6 +5,8 @@
 **Status:** Implementation complete — 38 tests green, ruff clean, mypy clean. Run `python scripts/run_m3b_validation.py` to obtain the VALIDATED / FAILED_VALIDATION verdict on real NSE data.   |   **Regulatory mode:** A
 **Prerequisites:** [02-indicators-and-scanners.md](02-indicators-and-scanners.md) (momentum sub-score computable), [01-local-mvp-foundation.md](01-local-mvp-foundation.md) (deep adjusted, point-in-time history), and the spike **plan** from [00-phase-0-derisk.md](00-phase-0-derisk.md).
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** Storage is now **TimescaleDB** (DuckDB retired, D-059) and `scripts/run_m3b_validation.py` fetches via **Kite** (D-058). The validation methodology is unchanged.
+
 ## Overview
 Executes the **M3b spike**: prove on historical adjusted data that the **rule-based momentum score tracks realized forward relative strength** — quantile/IC analysis with an objective decision gate (**ship the composite vs redesign scoring now**). This is **measurement validation, not a performance claim** ([SPEC §6.5](../../SPEC.md), [docs/15 §4](../15-machine-learning-and-data-science.md)). It **gates the whole product**: no composite-driven UI ships until it passes ([docs/13 §3.3, §7.1](../13-scanner-engine-and-scoring.md)). If the score is noise, the redesign loop runs **before** any UI ([04-ai-explanation-layer.md](04-ai-explanation-layer.md) / [05-api-and-pipeline.md](05-api-and-pipeline.md) / [06-frontend-foundation-and-v1-screens.md](06-frontend-foundation-and-v1-screens.md) stay blocked on the composite path).
 

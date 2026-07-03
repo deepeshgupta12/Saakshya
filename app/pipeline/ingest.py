@@ -1,4 +1,4 @@
-"""EOD ingest + compute pipeline: universe → source → DuckDB → indicators → scanners.
+"""EOD ingest + compute pipeline: universe → source → TimescaleDB → indicators → scanners.
 
 Pipeline stages (docs/12 §1):
   M0  1. Seed the universe (stock_master + exchange_symbols)
@@ -6,7 +6,7 @@ Pipeline stages (docs/12 §1):
       3. Normalize to stock_id-keyed OhlcBar (raw + source adj)
       4. Upsert into daily_ohlc
 
-  M1  5. Fetch corporate actions from yfinance (splits + dividends)
+  M1  5. Fetch corporate actions from the active source (Kite exposes none — docs/12 §3.4)
       6. Ingest into the corporate_actions master (compute single-event factors)
       7. Back-adjust full history: compute cumulative adj_factor per date,
          write *_adj columns, set is_adjusted=True
@@ -72,7 +72,7 @@ def run_ingest(
         entries = entries[:limit]
 
     # Use caller's connection if provided (avoids a second write-connection to the
-    # same DuckDB file); otherwise open and manage our own.
+    # caller's DB connection); otherwise open and manage our own.
     ctx = nullcontext(conn) if conn is not None else get_connection()
     with ctx as _conn:
         repo = Repository(_conn)
@@ -112,8 +112,8 @@ def run_ingest(
             repo, ticker_to_stock_id, ca_rows, as_of_version=_AS_OF_VERSION
         )
 
-        # ── M1: build yfinance adj_close map for reconciliation ───────────
-        # rows already contains yfinance's own adj_close (from the M0 fetch above).
+        # ── M1: build source adj_close map for reconciliation ───────────
+        # rows already contains the source's own adj_close (from the M0 fetch above; Kite = unadjusted).
         # Build {ticker → {session_date → yf_adj_close}} before the adjuster
         # overwrites *_adj columns with our computed values.
         yf_adj_map = _build_yf_adj_map(rows)
@@ -144,7 +144,7 @@ def run_ingest(
 
 
 def _build_yf_adj_map(rows: list[OHLCRow]) -> dict[str, dict[date, float]]:
-    """Group yfinance OHLCRows into {ticker → {date → adj_close}}."""
+    """Group source OHLCRows into {ticker → {date → adj_close}} for 2nd-source reconciliation."""
     result: dict[str, dict[date, float]] = {}
     for r in rows:
         if r.close_adj and r.close_adj > 0:

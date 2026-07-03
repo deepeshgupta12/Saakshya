@@ -23,7 +23,7 @@
   "meta": {
     "as_of": "2026-06-26",
     "data_confidence": "high",
-    "source": "nse_bhavcopy",
+    "source": "kite",
     "is_adjusted": true,
     "generated_at": "2026-06-27T02:14:08Z",
     "request_id": "req_8f1c...",
@@ -467,7 +467,7 @@
 > **Auth:** Bearer with `admin` scope (RBAC). **Cache:** `none`. **Rate:** 30/min. All changes versioned and attributed.
 
 ### GET /api/admin/data-quality
-- **Purpose:** ingestion job & data-quality status, quarantine list. **200:** `{ "data": { "jobs": [ { "date": "2026-06-26", "source": "nse_bhavcopy", "status": "ok", "quarantined": 3 } ], "quarantine": [ { "symbol": "XYZ", "reason": "abnormal_jump", "as_of": "2026-06-26" } ] } }`
+- **Purpose:** ingestion job & data-quality status, quarantine list. **200:** `{ "data": { "jobs": [ { "date": "2026-06-26", "source": "kite", "status": "ok", "quarantined": 3 } ], "quarantine": [ { "symbol": "XYZ", "reason": "abnormal_jump", "as_of": "2026-06-26" } ] } }`
 
 ### POST /api/admin/data-quality/{symbol}/correct
 - **Purpose:** correct + re-emit dependents. **Body:** `{ "date": "2026-06-26", "action": "reingest", "note": "vendor restated" }` · **200:** `{ "data": { "requeued": ["indicators", "scanners", "ai_summary"] } }` ([SPEC §6.2](../SPEC.md)).

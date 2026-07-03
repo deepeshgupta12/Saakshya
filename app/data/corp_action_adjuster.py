@@ -5,7 +5,7 @@ Two entry points:
     of session dates, returns the cumulative backward price-adjustment factor for each date.
 
   ``adjust_all`` — orchestrates the full stock-universe pass: for each stock, reads corp
-    actions and raw bars from DuckDB, computes adj factors, reconciles vs the yfinance
+    actions and raw bars from the DB, computes adj factors, reconciles vs a 2nd
     adj-close baseline (2nd-source cross-check), and bulk-updates the *_adj columns.
 
 Adjustment convention:
@@ -89,10 +89,10 @@ def adjust_all(
     tol: float = _DEFAULT_TOL,
     jump_threshold: float = _JUMP_THRESHOLD,
 ) -> AdjustSummary:
-    """Adjust every stock in the universe and reconcile against the yfinance 2nd source.
+    """Adjust every stock in the universe and reconcile against a 2nd source.
 
     ``yf_adj_close``: ticker → {session_date → adj_close_from_yfinance}.
-    Reconciliation compares our computed adj_close vs yfinance adj_close for each date.
+    Reconciliation compares our computed adj_close vs the 2nd-source adj_close for each date.
     """
     from app.storage.repository import DataQualityLog
 
@@ -118,7 +118,7 @@ def adjust_all(
                 severity="warn",
                 status="quarantined",
                 stock_id=stock_id,
-                detail=f"{result.mismatches} date(s) differ >  {tol * 100:.0f}% from yfinance adj",
+                detail=f"{result.mismatches} date(s) differ >  {tol * 100:.0f}% from the 2nd-source adj",
             ))
 
     return summary
@@ -161,7 +161,7 @@ def _adjust_stock(
     dates = [b.session_date for b in bars]
     factors = compute_adj_factors(actions, dates)
 
-    # Build updates; reconcile vs yfinance adj_close.
+    # Build updates; reconcile vs the 2nd-source adj_close.
     updates: list[tuple[float, float, float, float, float, bool, bool, date]] = []
     for bar, adj_f in zip(bars, factors, strict=True):
         o_adj = bar.open_raw * adj_f

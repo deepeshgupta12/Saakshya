@@ -2,7 +2,7 @@
 
 The committed ``data/universe.csv`` is a representative ~50-name Nifty universe for the
 local prototype. ISIN is intentionally NOT hand-entered (evidence-first: ISINs are
-sourced authoritatively from NSE Bhavcopy / the licensed vendor in M1+); ``stock_master``
+sourced from the Kite instrument master / a licensed vendor (D-058); ``stock_master``
 keys on a generated ``stock_id`` with a unique ``primary_symbol`` until ISIN is backfilled.
 Survivorship is preserved — delisted/merged names are kept, never deleted (SPEC §6.3).
 """
@@ -29,7 +29,7 @@ class UniverseEntry(BaseModel):
 
     @property
     def yf_ticker(self) -> str:
-        """yfinance NSE ticker, e.g. ``RELIANCE.NS``."""
+        """NSE ticker in the legacy ``.NS`` form; KiteSource normalises it to a Kite tradingsymbol."""
         return f"{self.symbol}.NS"
 
 

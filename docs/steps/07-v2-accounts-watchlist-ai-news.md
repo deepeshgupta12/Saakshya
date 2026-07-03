@@ -5,6 +5,8 @@
 **Status:** Complete (2026-07-01) — Auth, IDOR suite, Watchlist (backend + frontend), OAuth stub (Google OIDC route + oauth_identities), AI brief, News pipeline (DB schema, RSS ingestor, entity resolver, heuristic sentiment, API endpoints, stock-page UI) all implemented. Finance-tuned ML sentiment classifier deferred to step 15.   |   **Regulatory mode:** A
 **Prerequisites:** [04-ai-explanation-layer.md](04-ai-explanation-layer.md) · [05-api-and-pipeline.md](05-api-and-pipeline.md) · [06-frontend-foundation-and-v1-screens.md](06-frontend-foundation-and-v1-screens.md)
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** **Accounts, watchlists and OAuth identities are now MongoDB documents** (D-059); the AI brief + news run on **Claude** (D-057) over **TimescaleDB**. Portfolio/strategy/watchlist were later moved to the auth-gated `(app)` route group (**D-061**).
+
 ## Overview
 V2 is the first user-personalization layer. It adds **user accounts + auth** (JWT/OAuth, RBAC, row-scoping), **watchlists** (multiple lists, items, scanner tags), the **AI stock summary** surfaced in-product, the **AI daily market brief** (event-reporting), and **news sentiment** (ingestion, entity resolution with a confidence threshold, finance-tuned sentiment, retained source links). Every AI surface here is **grounded → runtime-verified → guardrail-checked → audit-logged**; every news→symbol link carries a confidence score and is held below a surfacing threshold. Nothing in this phase is directive: the brief reports what entered/exited scanners and what to *monitor*, never a ranked "what to buy"; the "AI suggested watchlist" is **filter-based discovery**, never a per-user buy-lean.
 

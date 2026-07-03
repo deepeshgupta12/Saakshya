@@ -6,6 +6,8 @@
 **Status:** Complete (M4 — 2026-06-30)   |   **Regulatory mode:** A
 **Prerequisites:** [00-phase-0-derisk.md](00-phase-0-derisk.md) · [01-local-mvp-foundation.md](01-local-mvp-foundation.md) · [02-indicators-and-scanners.md](02-indicators-and-scanners.md) · [03-scanner-score-validation.md](03-scanner-score-validation.md)
 
+> ⚠️ **Stack reset (2026-07-02/03) — this step predates it.** **AI is Anthropic Claude only** — Haiku (cheap) / Sonnet (premium); **Ollama/Gemma removed** (D-057, supersedes D-027/D-051). Where this file says Ollama/Gemma/qwen, read **Claude**; the provider abstraction is unchanged. See [docs/14](../14-ai-llm-agent-architecture.md).
+
 ## Overview
 Build the **AI explanation layer** that turns a deterministic, computed signal into descriptive, Mode-A-safe plain language — and never lets a fabricated number, target, or buy-lean reach the user. The AI receives **only** a structured payload of computed facts ([SPEC §6.6](../../SPEC.md), [14 §4](../14-ai-llm-agent-architecture.md)); a runtime verification harness extracts every number/named fact from the model output and confirms each traces to the payload, blocking/regenerating on mismatch; a versioned blocked-phrase guardrail runs at **output time**; every generation (published or suppressed) writes an immutable audit record. **Default provider is Ollama (`qwen2.5:7b-instruct`) for local-first MVP** (D-027) behind a `LLMProvider` protocol abstraction — swapping to Claude Haiku in production is a single `SAAKSHYA_AI_PROVIDER=anthropic` env-var change. Regenerate-on-change caching keyed by signal category and a hard daily call ceiling ([SPEC §6.8](../../SPEC.md)).
 
